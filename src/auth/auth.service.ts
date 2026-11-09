@@ -4,6 +4,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service.js';
 import { RegisterDto } from './dto/register.dto.js';
@@ -15,7 +16,41 @@ export class AuthService {
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
+    private readonly configService: ConfigService,
   ) {}
+
+  private async generateTokens(payload: JwtPayload) {
+    const accessSecret = this.configService.get<string>(
+      'JWT_SECRET',
+      'supersecretjwtaccesskey123456789!@#$%^&*()',
+    );
+    const accessExpiresIn = this.configService.get<string>('JWT_EXPIRES_IN', '15m');
+
+    const refreshSecret = this.configService.get<string>(
+      'JWT_REFRESH_SECRET',
+      'supersecretjwtrefreshkey987654321!@#$%^&*()',
+    );
+    const refreshExpiresIn = this.configService.get<string>('JWT_REFRESH_EXPIRES_IN', '7d');
+
+    const [accessToken, refreshToken] = await Promise.all([
+      this.jwtService.signAsync(payload, {
+        secret: accessSecret,
+        expiresIn: accessExpiresIn as any,
+      }),
+      this.jwtService.signAsync(payload, {
+        secret: refreshSecret,
+        expiresIn: refreshExpiresIn as any,
+      }),
+    ]);
+
+    return { accessToken, refreshToken };
+  }
+
+  private async updateRefreshToken(userId: string, refreshToken: string) {
+    const salt = await bcrypt.genSalt(10);
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, salt);
+    await this.usersService.updateHashedRefreshToken(userId, hashedRefreshToken);
+  }
 
   async register(registerDto: RegisterDto) {
     const existingUser = await this.usersService.findByEmail(registerDto.email);
@@ -32,10 +67,21 @@ export class AuthService {
       fullName: registerDto.fullName,
     });
 
-    const { password, ...userWithoutPassword } = newUser;
+    const payload: JwtPayload = {
+      sub: newUser.id,
+      email: newUser.email,
+      role: newUser.role,
+    };
+
+    const tokens = await this.generateTokens(payload);
+    await this.updateRefreshToken(newUser.id, tokens.refreshToken);
+
+    const { password, hashedRefreshToken, ...userWithoutSecrets } = newUser;
+
     return {
       message: 'Registration successful',
-      user: userWithoutPassword,
+      user: userWithoutSecrets,
+      tokens,
     };
   }
 
@@ -60,16 +106,25 @@ export class AuthService {
       role: user.role,
     };
 
-    const token = await this.jwtService.signAsync(payload);
+    const tokens = await this.generateTokens(payload);
+    await this.updateRefreshToken(user.id, tokens.refreshToken);
 
     return {
-      accessToken: token,
+      message: 'Login successful',
+      tokens,
       user: {
         id: user.id,
         email: user.email,
         fullName: user.fullName,
         role: user.role,
       },
+    };
+  }
+
+  async logout(userId: string) {
+    await this.usersService.updateHashedRefreshToken(userId, null);
+    return {
+      message: 'Logout successful',
     };
   }
 }

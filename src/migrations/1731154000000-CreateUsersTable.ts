@@ -20,6 +20,7 @@ export class CreateUsersTable1731154000000 implements MigrationInterface {
         "fullName" character varying,
         "role" "public"."users_role_enum" NOT NULL DEFAULT 'user',
         "isActive" boolean NOT NULL DEFAULT true,
+        "hashedRefreshToken" text,
         "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
         "updatedAt" TIMESTAMP NOT NULL DEFAULT now(),
         CONSTRAINT "UQ_users_email" UNIQUE ("email"),
