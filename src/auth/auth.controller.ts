@@ -13,6 +13,7 @@ import { AuthService } from './auth.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
+import { CurrentUser } from './decorators/current-user.decorator.js';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -40,20 +41,21 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'User logout (Invalidate refresh token)' })
+  @ApiOperation({ summary: 'User logout (Revoke refresh token & blacklist access token in Redis)' })
   @ApiResponse({ status: 200, description: 'Logged out successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async logout(@Request() req: any) {
-    return this.authService.logout(req.user.id);
+    const rawToken = req.headers.authorization?.replace('Bearer ', '');
+    return this.authService.logout(req.user.id, rawToken);
   }
 
   @UseGuards(JwtAuthGuard)
-  @Get('profile')
+  @Get('me')
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Get current user profile (Protected)' })
-  @ApiResponse({ status: 200, description: 'Profile of authenticated user' })
+  @ApiOperation({ summary: 'Get current user profile (Current User)' })
+  @ApiResponse({ status: 200, description: 'Current authenticated user' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getProfile(@Request() req: any) {
-    return req.user;
+  getCurrentUser(@CurrentUser() user: any) {
+    return user;
   }
 }

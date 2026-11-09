@@ -7,6 +7,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service.js';
+import { RedisService } from '../redis/redis.service.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { JwtPayload } from './interfaces/jwt-payload.interface.js';
@@ -17,6 +18,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
   ) {}
 
   private async generateTokens(payload: JwtPayload) {
@@ -121,10 +123,17 @@ export class AuthService {
     };
   }
 
-  async logout(userId: string) {
+  async logout(userId: string, rawToken?: string) {
+    // 1. Remove refresh token from DB
     await this.usersService.updateHashedRefreshToken(userId, null);
+
+    // 2. Blacklist Access Token in Redis (TTL = 1 day = 86400s)
+    if (rawToken) {
+      await this.redisService.blacklistToken(rawToken, 86400);
+    }
+
     return {
-      message: 'Logout successful',
+      message: 'Logout successful, token added to Redis blacklist',
     };
   }
 }

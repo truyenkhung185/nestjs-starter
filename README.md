@@ -1,10 +1,11 @@
 # NestJS Starter Project
 
-Dự án NestJS RESTful API starter tích hợp TypeORM, Database Migration, Swagger, i18n và Authentication (JWT + Bcrypt).
+Dự án NestJS RESTful API starter tích hợp TypeORM, Database Migration thủ công, Swagger, i18n, Redis và Authentication (JWT + Bcrypt).
 
 ## 🚀 Công nghệ sử dụng
 - **NestJS v12** (Node.js framework)
-- **TypeORM & PostgreSQL**
+- **TypeORM & PostgreSQL**: ORM kết nối database và quản lý migration thủ công
+- **Redis (ioredis)**: Quản lý Token Blacklist khi user Logout
 - **Swagger (@nestjs/swagger)**: Tài liệu hóa API tại `/api`
 - **nestjs-i18n**: Hỗ trợ đa ngôn ngữ (English `en`, Tiếng Việt `vi`)
 - **Authentication**: JWT (Access Token & Refresh Token), Passport (`@nestjs/jwt`, `passport-jwt`)
@@ -25,7 +26,7 @@ Tạo file `.env` từ `.env.example`:
 ```bash
 cp .env.example .env
 ```
-Cấu hình các thông số Database PostgreSQL (`DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME`), `JWT_SECRET`, và `JWT_REFRESH_SECRET`.
+Cấu hình PostgreSQL (`DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_NAME`), Redis (`REDIS_HOST`, `REDIS_PORT`), và JWT secrets.
 
 ### 3. Database Migrations thủ công (TypeORM)
 Dự án đã cấu hình đầy đủ các lệnh migration thủ công:
@@ -71,11 +72,11 @@ Sau khi khởi động ứng dụng, truy cập Swagger UI tại:
 👉 `http://localhost:3000/api`
 
 ### Các Endpoints chính:
-- **App**:
+- **App (PR 1)**:
   - `GET /`: Hello World cơ bản.
-  - `GET /hello-i18n?lang=vi` (hoặc `lang=en`): Trả về lời chào theo ngôn ngữ thông qua `nestjs-i18n`.
-- **Auth (Register - Login - Logout)**:
-  - `POST /auth/register`: Đăng ký tài khoản (hashing password với Bcrypt, sinh Access Token & Refresh Token).
+  - `GET /hello-i18n?lang=vi` (hoặc `lang=en`): Trả về lời chào theo ngôn ngữ qua `nestjs-i18n`.
+- **Auth (PR 2)**:
+  - `POST /auth/register`: Đăng ký tài khoản (băm mật khẩu với Bcrypt, sinh Access Token & Refresh Token).
   - `POST /auth/login`: Đăng nhập & nhận cặp Bearer JWT (Access Token + Refresh Token).
-  - `POST /auth/logout`: Đăng xuất (yêu cầu Bearer Token), vô hiệu hóa Refresh Token trong database.
-  - `GET /auth/profile`: Endpoint được bảo vệ bằng `JwtAuthGuard` (yêu cầu Header `Authorization: Bearer <token>`).
+  - `POST /auth/logout`: Đăng xuất (yêu cầu Bearer Token), vô hiệu hóa Refresh Token trong DB và đưa Access Token vào **Redis Blacklist**.
+  - `GET /auth/me`: Lấy thông tin Current User (Decorated bởi `@CurrentUser()`).
