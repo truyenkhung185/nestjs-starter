@@ -27,6 +27,10 @@ export class UsersService {
     return user;
   }
 
+  async findByIdOrNull(id: string): Promise<User | null> {
+    return await this.userRepository.findOne({ where: { id } });
+  }
+
   async updateHashedRefreshToken(userId: string, hashedRefreshToken: string | null): Promise<void> {
     await this.userRepository.update(userId, { hashedRefreshToken });
   }

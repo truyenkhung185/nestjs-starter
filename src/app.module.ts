@@ -25,6 +25,15 @@ const __dirname = path.dirname(__filename);
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: '.env',
+      validate: (config: Record<string, any>) => {
+        const requiredVars = ['JWT_SECRET'];
+        for (const varName of requiredVars) {
+          if (!config[varName] || String(config[varName]).trim() === '') {
+            throw new Error(`Environment validation failed: "${varName}" is required but not defined.`);
+          }
+        }
+        return config;
+      },
     }),
     TypeOrmModule.forRoot({
       ...dataSourceOptions,

@@ -4,7 +4,6 @@ import {
   Body,
   Get,
   UseGuards,
-  Request,
   HttpCode,
   HttpStatus,
 } from '@nestjs/common';
@@ -14,6 +13,16 @@ import { RegisterDto } from './dto/register.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { CurrentUser } from './decorators/current-user.decorator.js';
+
+interface AuthenticatedUser {
+  id: string;
+  email: string;
+  fullName: string | null;
+  role: string;
+  isActive: boolean;
+  rawToken?: string;
+  jti?: string;
+}
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -31,7 +40,7 @@ export class AuthController {
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'User login' })
-  @ApiResponse({ status: 200, description: 'Access & Refresh Tokens returned' })
+  @ApiResponse({ status: 200, description: 'Access Token returned' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
   async login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto);
@@ -41,12 +50,12 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'User logout (Revoke refresh token & blacklist access token in Redis)' })
+  @ApiOperation({ summary: 'User logout (blacklist access token in Redis)' })
   @ApiResponse({ status: 200, description: 'Logged out successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async logout(@Request() req: any) {
-    const rawToken = req.headers.authorization?.replace('Bearer ', '');
-    return this.authService.logout(req.user.id, rawToken);
+  async logout(@CurrentUser() user: AuthenticatedUser) {
+    const tokenIdentifier = user.jti || user.rawToken;
+    return this.authService.logout(user.id, tokenIdentifier);
   }
 
   @UseGuards(JwtAuthGuard)
@@ -55,7 +64,8 @@ export class AuthController {
   @ApiOperation({ summary: 'Get current user profile (Current User)' })
   @ApiResponse({ status: 200, description: 'Current authenticated user' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  getCurrentUser(@CurrentUser() user: any) {
-    return user;
+  getCurrentUser(@CurrentUser() user: AuthenticatedUser) {
+    const { rawToken: _rawToken, jti: _jti, ...cleanUser } = user;
+    return cleanUser;
   }
 }
