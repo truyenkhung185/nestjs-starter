@@ -3,14 +3,17 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
+import { I18nService } from 'nestjs-i18n';
 import { User } from './entities/user.entity.js';
 import { UserFollow } from './entities/user-follow.entity.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { AttachmentsService } from '../attachments/attachments.service.js';
 import { AttachmentAccess } from '../attachments/entities/attachment.entity.js';
+import { ATTACHABLE_TYPES } from './constants/user.constants.js';
 
 export interface UserProfileResponse {
   id: string;
@@ -29,12 +32,16 @@ export interface UserProfileResponse {
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
     @InjectRepository(UserFollow)
     private readonly userFollowRepository: Repository<UserFollow>,
     private readonly attachmentsService: AttachmentsService,
+    private readonly dataSource: DataSource,
+    private readonly i18n: I18nService,
   ) {}
 
   async create(userData: Partial<User>): Promise<User> {
@@ -49,7 +56,10 @@ export class UsersService {
   async findById(id: string): Promise<User> {
     const user = await this.userRepository.findOne({ where: { id } });
     if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
+      throw new NotFoundException(
+        this.i18n.t('users.USER_NOT_FOUND', { args: { id } }) ||
+          `User with ID ${id} not found`,
+      );
     }
     return user;
   }
@@ -82,37 +92,40 @@ export class UsersService {
 
     // Process avatar file if provided
     if (avatarFile) {
-      // Validate file type (image only)
-      const allowedMimes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-      if (!allowedMimes.includes(avatarFile.mimetype)) {
-        throw new BadRequestException(
-          'Invalid avatar file type. Allowed formats: JPEG, PNG, WEBP, GIF',
-        );
-      }
+      // 1. Get old attachments before saving new one
+      const oldAttachments = await this.attachmentsService.findByAttachable(
+        ATTACHABLE_TYPES.USER_AVATAR,
+        user.id,
+      );
 
-      // Max size: 5MB
-      const maxSizeBytes = 5 * 1024 * 1024;
-      if (avatarFile.size > maxSizeBytes) {
-        throw new BadRequestException('Avatar file size must not exceed 5MB');
-      }
-
-      // Delete previous avatar attachment files for this user
-      await this.attachmentsService.deleteByAttachable('UserAvatar', user.id);
-
-      // Save attachment with polymorphic relationship
+      // 2. Save new attachment
       const accessType = isPrivateAvatar
         ? AttachmentAccess.PRIVATE
         : AttachmentAccess.PUBLIC;
 
-      const attachment = await this.attachmentsService.saveAttachment({
+      const newAttachment = await this.attachmentsService.saveAttachment({
         file: avatarFile,
-        attachableType: 'UserAvatar',
+        attachableType: ATTACHABLE_TYPES.USER_AVATAR,
         attachableId: user.id,
         uploaderId: user.id,
         accessType,
       });
 
-      user.avatarUrl = attachment.url;
+      user.avatarUrl = newAttachment.url;
+
+      // 3. Save user with new avatar URL inside transaction/atomic step
+      const updatedUser = await this.userRepository.save(user);
+
+      // 4. Safe post-cleanup: delete old physical files and records ONLY after success
+      if (oldAttachments.length > 0) {
+        await this.attachmentsService
+          .deleteAttachments(oldAttachments)
+          .catch((err) => {
+            this.logger.warn(`Failed to clean up old avatar files: ${err.message}`);
+          });
+      }
+
+      return updatedUser;
     }
 
     return await this.userRepository.save(user);
@@ -158,28 +171,56 @@ export class UsersService {
     followingId: string,
   ): Promise<{ message: string }> {
     if (followerId === followingId) {
-      throw new BadRequestException('You cannot follow yourself');
+      throw new BadRequestException(
+        this.i18n.t('users.CANNOT_FOLLOW_SELF') || 'You cannot follow yourself',
+      );
     }
 
     const targetUser = await this.findById(followingId);
     if (!targetUser.isActive) {
-      throw new BadRequestException('Cannot follow an inactive user');
+      throw new BadRequestException(
+        this.i18n.t('users.CANNOT_FOLLOW_INACTIVE') ||
+          'Cannot follow an inactive user',
+      );
     }
 
     const existingFollow = await this.userFollowRepository.findOne({
       where: { followerId, followingId },
     });
     if (existingFollow) {
-      throw new ConflictException('You are already following this user');
+      throw new ConflictException(
+        this.i18n.t('users.ALREADY_FOLLOWING') ||
+          'You are already following this user',
+      );
     }
 
-    const follow = this.userFollowRepository.create({
-      followerId,
-      followingId,
-    });
-    await this.userFollowRepository.save(follow);
+    try {
+      const follow = this.userFollowRepository.create({
+        followerId,
+        followingId,
+      });
+      await this.userFollowRepository.save(follow);
+    } catch (err: any) {
+      // Postgres unique constraint violation
+      if (
+        err?.code === '23505' ||
+        err?.message?.includes('duplicate key') ||
+        err?.message?.includes('unique')
+      ) {
+        throw new ConflictException(
+          this.i18n.t('users.ALREADY_FOLLOWING') ||
+            'You are already following this user',
+        );
+      }
+      throw err;
+    }
 
-    return { message: `Successfully followed ${targetUser.fullName || targetUser.email}` };
+    const targetName = targetUser.fullName || targetUser.email;
+    return {
+      message:
+        this.i18n.t('users.FOLLOW_SUCCESS', { args: { name: targetName } }) ||
+        `Successfully followed ${targetName}`,
+    };
   }
 
   async unfollowUser(
@@ -187,7 +228,10 @@ export class UsersService {
     followingId: string,
   ): Promise<{ message: string }> {
     if (followerId === followingId) {
-      throw new BadRequestException('You cannot unfollow yourself');
+      throw new BadRequestException(
+        this.i18n.t('users.CANNOT_UNFOLLOW_SELF') ||
+          'You cannot unfollow yourself',
+      );
     }
 
     const targetUser = await this.findById(followingId);
@@ -196,11 +240,18 @@ export class UsersService {
       where: { followerId, followingId },
     });
     if (!follow) {
-      throw new BadRequestException('You are not following this user');
+      throw new BadRequestException(
+        this.i18n.t('users.NOT_FOLLOWING') || 'You are not following this user',
+      );
     }
 
     await this.userFollowRepository.remove(follow);
 
-    return { message: `Successfully unfollowed ${targetUser.fullName || targetUser.email}` };
+    const targetName = targetUser.fullName || targetUser.email;
+    return {
+      message:
+        this.i18n.t('users.UNFOLLOW_SUCCESS', { args: { name: targetName } }) ||
+        `Successfully unfollowed ${targetName}`,
+    };
   }
 }

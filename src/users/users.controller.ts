@@ -11,6 +11,9 @@ import {
   UploadedFile,
   Query,
   ParseUUIDPipe,
+  ParseFilePipe,
+  MaxFileSizeValidator,
+  FileTypeValidator,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -26,6 +29,8 @@ import { UsersService } from './users.service.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import { AVATAR_MAX_BYTES } from './constants/user.constants.js';
 
 @ApiTags('Users')
 @Controller('users')
@@ -34,7 +39,13 @@ export class UsersController {
 
   @UseGuards(JwtAuthGuard)
   @Patch('profile')
-  @UseInterceptors(FileInterceptor('avatar'))
+  @UseInterceptors(
+    FileInterceptor('avatar', {
+      limits: {
+        fileSize: AVATAR_MAX_BYTES,
+      },
+    }),
+  )
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({
     summary:
@@ -52,9 +63,18 @@ export class UsersController {
   @ApiResponse({ status: 400, description: 'Invalid input or invalid file type/size' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async updateProfile(
-    @CurrentUser() currentUser: any,
+    @CurrentUser() currentUser: AuthUser,
     @Body() updateUserDto: UpdateUserDto,
-    @UploadedFile() avatarFile?: Express.Multer.File,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: AVATAR_MAX_BYTES }),
+          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp|gif)$/i }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    avatarFile?: Express.Multer.File,
     @Query('private') isPrivate?: string,
   ) {
     const isPrivateAvatar = isPrivate === 'true' || isPrivate === '1';
@@ -79,7 +99,7 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'User not found' })
   async getProfile(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() currentUser: any,
+    @CurrentUser() currentUser: AuthUser,
   ) {
     return await this.usersService.getProfile(id, currentUser.id);
   }
@@ -95,7 +115,7 @@ export class UsersController {
   @ApiResponse({ status: 409, description: 'Already following user' })
   async followUser(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() currentUser: any,
+    @CurrentUser() currentUser: AuthUser,
   ) {
     return await this.usersService.followUser(currentUser.id, id);
   }
@@ -110,7 +130,7 @@ export class UsersController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async unfollowUser(
     @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() currentUser: any,
+    @CurrentUser() currentUser: AuthUser,
   ) {
     return await this.usersService.unfollowUser(currentUser.id, id);
   }

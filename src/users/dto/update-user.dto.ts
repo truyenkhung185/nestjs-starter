@@ -1,5 +1,6 @@
 import { IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { USER_FIELD_LIMITS } from '../constants/user.constants.js';
 
 export class UpdateUserDto {
   @ApiProperty({
@@ -9,7 +10,9 @@ export class UpdateUserDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(255, { message: 'Full name must not exceed 255 characters' })
+  @MaxLength(USER_FIELD_LIMITS.FULL_NAME_MAX_LENGTH, {
+    message: `Full name must not exceed ${USER_FIELD_LIMITS.FULL_NAME_MAX_LENGTH} characters`,
+  })
   fullName?: string;
 
   @ApiProperty({
@@ -19,6 +22,8 @@ export class UpdateUserDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(1000, { message: 'Bio must not exceed 1000 characters' })
+  @MaxLength(USER_FIELD_LIMITS.BIO_MAX_LENGTH, {
+    message: `Bio must not exceed ${USER_FIELD_LIMITS.BIO_MAX_LENGTH} characters`,
+  })
   bio?: string;
 }
