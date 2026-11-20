@@ -3,6 +3,7 @@ import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import * as fs from 'fs';
 import { AttachmentsService } from './attachments.service.js';
 import { AttachmentAccess } from './entities/attachment.entity.js';
+import { UserRole } from '../users/entities/user.entity.js';
 
 vi.mock('fs', async () => {
   const actual: any = await vi.importActual('fs');
@@ -20,21 +21,26 @@ vi.mock('fs', async () => {
 describe('AttachmentsService', () => {
   let service: AttachmentsService;
   let mockAttachmentRepo: any;
+  let mockI18n: any;
 
   beforeEach(() => {
     mockAttachmentRepo = {
-      create: vi.fn((data) => ({ ...data, id: 'att-uuid-123' })),
+      create: vi.fn((data) => ({ ...data, id: data.id || 'att-uuid-123' })),
       save: vi.fn((att) => Promise.resolve(att)),
       findOne: vi.fn(),
       find: vi.fn(),
       delete: vi.fn(),
     };
 
-    service = new AttachmentsService(mockAttachmentRepo);
+    mockI18n = {
+      t: vi.fn((key: string) => key),
+    };
+
+    service = new AttachmentsService(mockAttachmentRepo, mockI18n);
   });
 
   describe('saveAttachment', () => {
-    it('should save a public attachment and create db record', async () => {
+    it('should save a public attachment with safe extension and create db record', async () => {
       const mockFile: any = {
         originalname: 'avatar.png',
         mimetype: 'image/png',
@@ -61,10 +67,30 @@ describe('AttachmentsService', () => {
           attachableId: 'user-uuid-1',
         }),
       );
-      expect(result.url).toMatch(/^\/public\//);
+      expect(result.url).toMatch(/^\/public\/[a-f0-9-]+\.png$/);
     });
 
-    it('should save a private attachment with private endpoint url', async () => {
+    it('should deduce extension from mime type even if original filename has malicious extension', async () => {
+      const mockFile: any = {
+        originalname: 'xss.html',
+        mimetype: 'image/jpeg',
+        size: 1024,
+        buffer: Buffer.from('fake-data'),
+      };
+
+      const result = await service.saveAttachment({
+        file: mockFile,
+        attachableType: 'UserAvatar',
+        attachableId: 'user-uuid-1',
+        uploaderId: 'user-uuid-1',
+        accessType: AttachmentAccess.PUBLIC,
+      });
+
+      // Must be saved with .jpg extension from verified mime type
+      expect(result.url).toMatch(/^\/public\/[a-f0-9-]+\.jpg$/);
+    });
+
+    it('should save a private attachment with correct route url /attachments/private/:id/download', async () => {
       const mockFile: any = {
         originalname: 'secret.png',
         mimetype: 'image/png',
@@ -80,7 +106,7 @@ describe('AttachmentsService', () => {
         accessType: AttachmentAccess.PRIVATE,
       });
 
-      expect(result.url).toMatch(/^\/api\/attachments\/private\/stream\//);
+      expect(result.url).toBe(`/attachments/private/${result.id}/download`);
       expect(result.accessType).toBe(AttachmentAccess.PRIVATE);
     });
   });
@@ -117,7 +143,7 @@ describe('AttachmentsService', () => {
       expect(result.filePath).toBe('/uploads/private/file.png');
     });
 
-    it('should allow admin to access private file', async () => {
+    it('should allow admin (UserRole.ADMIN) to access private file', async () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       mockAttachmentRepo.findOne.mockResolvedValue({
         id: 'att-1',
@@ -129,7 +155,7 @@ describe('AttachmentsService', () => {
       const result = await service.getPrivateAttachmentFile(
         'att-1',
         'admin-id',
-        'admin',
+        UserRole.ADMIN,
       );
 
       expect(result.filePath).toBe('/uploads/private/file.png');
