@@ -27,6 +27,12 @@ export class User {
   @Column({ nullable: true })
   fullName: string;
 
+  @Column({ type: 'text', nullable: true })
+  bio: string | null;
+
+  @Column({ type: 'varchar', length: 500, nullable: true })
+  avatarUrl: string | null;
+
   @Column({
     type: 'enum',
     enum: UserRole,
