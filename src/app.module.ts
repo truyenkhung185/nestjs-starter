@@ -17,6 +17,7 @@ import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { RedisModule } from './redis/redis.module.js';
 import { AttachmentsModule } from './attachments/attachments.module.js';
+import { ArticlesModule } from './articles/articles.module.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +57,7 @@ const __dirname = path.dirname(__filename);
     UsersModule,
     AuthModule,
     AttachmentsModule,
+    ArticlesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
