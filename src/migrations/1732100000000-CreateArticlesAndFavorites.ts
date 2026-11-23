@@ -46,9 +46,38 @@ export class CreateArticlesAndFavorites1732100000000
       CREATE INDEX IF NOT EXISTS "IDX_article_favorites_user" ON "article_favorites" ("user_id");
       CREATE INDEX IF NOT EXISTS "IDX_article_favorites_article" ON "article_favorites" ("article_id");
     `);
+
+    // Trigger to keep articles.favorites_count automatically synchronized with article_favorites
+    await queryRunner.query(`
+      CREATE OR REPLACE FUNCTION update_article_favorites_count()
+      RETURNS TRIGGER AS $$
+      BEGIN
+        IF TG_OP = 'INSERT' THEN
+          UPDATE "articles"
+          SET "favorites_count" = "favorites_count" + 1
+          WHERE "id" = NEW."article_id";
+        ELSIF TG_OP = 'DELETE' THEN
+          UPDATE "articles"
+          SET "favorites_count" = GREATEST(0, "favorites_count" - 1)
+          WHERE "id" = OLD."article_id";
+        END IF;
+        RETURN NULL;
+      END;
+      $$ LANGUAGE plpgsql;
+    `);
+
+    await queryRunner.query(`
+      DROP TRIGGER IF EXISTS "trg_article_favorites_count" ON "article_favorites";
+      CREATE TRIGGER "trg_article_favorites_count"
+      AFTER INSERT OR DELETE ON "article_favorites"
+      FOR EACH ROW
+      EXECUTE FUNCTION update_article_favorites_count();
+    `);
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
+    await queryRunner.query(`DROP TRIGGER IF EXISTS "trg_article_favorites_count" ON "article_favorites";`);
+    await queryRunner.query(`DROP FUNCTION IF EXISTS update_article_favorites_count;`);
     await queryRunner.query(`DROP TABLE IF EXISTS "article_favorites";`);
     await queryRunner.query(`DROP TABLE IF EXISTS "articles";`);
   }

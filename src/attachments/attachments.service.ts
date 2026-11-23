@@ -56,13 +56,9 @@ export class AttachmentsService {
       accessType = AttachmentAccess.PUBLIC,
     } = options;
 
-    // Secure file extension deduction from validated mime type
-    const extension =
-      MIME_TO_EXTENSION[file.mimetype] ||
-      path.extname(file.originalname).toLowerCase();
-    const safeExtension = extension.startsWith('.') ? extension : `.${extension}`;
-
-    if (!safeExtension || safeExtension === '.') {
+    // Secure: ONLY deduce extension from verified whitelist mapping, NEVER from originalname
+    const safeExtension = MIME_TO_EXTENSION[file.mimetype];
+    if (!safeExtension) {
       throw new BadRequestException(
         this.i18n.t('users.INVALID_AVATAR_TYPE') || 'Unsupported file type',
       );
@@ -78,7 +74,6 @@ export class AttachmentsService {
     await fs.promises.writeFile(fullStoragePath, file.buffer);
 
     try {
-      // 1. Initial insert with placeholder url or public url
       const attachment = this.attachmentRepository.create({
         id: uniqueId,
         fileName: file.originalname,

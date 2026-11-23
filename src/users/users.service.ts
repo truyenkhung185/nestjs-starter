@@ -12,7 +12,7 @@ import { User } from './entities/user.entity.js';
 import { UserFollow } from './entities/user-follow.entity.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { AttachmentsService } from '../attachments/attachments.service.js';
-import { AttachmentAccess } from '../attachments/entities/attachment.entity.js';
+import { AttachmentAccess, Attachment } from '../attachments/entities/attachment.entity.js';
 import { ATTACHABLE_TYPES } from './constants/user.constants.js';
 
 export interface UserProfileResponse {
@@ -111,10 +111,24 @@ export class UsersService {
         accessType,
       });
 
+      const previousAvatarUrl = user.avatarUrl;
       user.avatarUrl = newAttachment.url;
 
-      // 3. Save user with new avatar URL inside transaction/atomic step
-      const updatedUser = await this.userRepository.save(user);
+      // 3. Save user with new avatar URL; rollback new attachment if user save fails
+      let updatedUser: User;
+      try {
+        updatedUser = await this.userRepository.save(user);
+      } catch (saveUserErr) {
+        // Rollback newly created attachment so no orphaned file/record is left
+        await this.attachmentsService
+          .deleteAttachments([newAttachment])
+          .catch((delErr) => {
+            this.logger.warn(`Failed to cleanup new attachment after user save failure: ${delErr.message}`);
+          });
+        // Restore user object state
+        user.avatarUrl = previousAvatarUrl;
+        throw saveUserErr;
+      }
 
       // 4. Safe post-cleanup: delete old physical files and records ONLY after success
       if (oldAttachments.length > 0) {

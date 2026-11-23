@@ -37,6 +37,8 @@ export interface FormattedArticle {
   updatedAt: Date;
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 @Injectable()
 export class ArticlesService {
   constructor(
@@ -145,32 +147,41 @@ export class ArticlesService {
       );
     }
 
-    if (updateArticleDto.title && updateArticleDto.title !== article.title) {
-      article.title = updateArticleDto.title;
-      article.slug = this.slugify(updateArticleDto.title);
+    // Atomic update only for supplied fields to avoid overwriting concurrent changes
+    const partialUpdate: Partial<Article> = {};
+    if (updateArticleDto.title !== undefined && updateArticleDto.title !== article.title) {
+      partialUpdate.title = updateArticleDto.title;
+      partialUpdate.slug = this.slugify(updateArticleDto.title);
     }
     if (updateArticleDto.description !== undefined) {
-      article.description = updateArticleDto.description;
+      partialUpdate.description = updateArticleDto.description;
     }
     if (updateArticleDto.body !== undefined) {
-      article.body = updateArticleDto.body;
+      partialUpdate.body = updateArticleDto.body;
     }
     if (updateArticleDto.tagList !== undefined) {
-      article.tagList = updateArticleDto.tagList;
+      partialUpdate.tagList = updateArticleDto.tagList;
     }
 
-    const saved = await this.articleRepository.save(article);
+    if (Object.keys(partialUpdate).length > 0) {
+      await this.articleRepository.update(article.id, partialUpdate);
+    }
+
+    const updated = await this.articleRepository.findOne({
+      where: { id: article.id },
+      relations: ['author'],
+    });
 
     const [fav, follow] = await Promise.all([
       this.favoriteRepository.findOne({
-        where: { userId, articleId: saved.id },
+        where: { userId, articleId: updated!.id },
       }),
       this.userFollowRepository.findOne({
-        where: { followerId: userId, followingId: saved.authorId },
+        where: { followerId: userId, followingId: updated!.authorId },
       }),
     ]);
 
-    return this.buildArticleResponse(saved, saved.author, !!fav, !!follow);
+    return this.buildArticleResponse(updated!, updated!.author, !!fav, !!follow);
   }
 
   async deleteArticle(
@@ -220,9 +231,12 @@ export class ArticlesService {
     }
 
     if (query.favorited) {
-      const favoritingUser = await this.userRepository.findOne({
-        where: [{ email: query.favorited }, { id: query.favorited }],
-      });
+      // Safe polymorphic lookup: check if favorited query is a valid UUID or email
+      const isUuid = UUID_REGEX.test(query.favorited);
+      const favoritingUser = isUuid
+        ? await this.userRepository.findOne({ where: { id: query.favorited } })
+        : await this.userRepository.findOne({ where: { email: query.favorited } });
+
       if (favoritingUser) {
         qb.innerJoin(
           'article_favorites',
@@ -301,8 +315,8 @@ export class ArticlesService {
           articleId: article.id,
         });
         await this.favoriteRepository.save(fav);
-        article.favoritesCount += 1;
-        await this.articleRepository.save(article);
+        // Atomic DB increment so concurrent favorites never lose counts
+        await this.articleRepository.increment({ id: article.id }, 'favoritesCount', 1);
       } catch (err: any) {
         // Handle race condition duplicate key gracefully
         if (!err?.code?.includes('23505') && !err?.message?.includes('duplicate key')) {
@@ -311,11 +325,14 @@ export class ArticlesService {
       }
     }
 
-    const follow = await this.userFollowRepository.findOne({
-      where: { followerId: userId, followingId: article.authorId },
-    });
+    const [updatedArticle, follow] = await Promise.all([
+      this.articleRepository.findOne({ where: { id: article.id }, relations: ['author'] }),
+      this.userFollowRepository.findOne({
+        where: { followerId: userId, followingId: article.authorId },
+      }),
+    ]);
 
-    return this.buildArticleResponse(article, article.author, true, !!follow);
+    return this.buildArticleResponse(updatedArticle!, updatedArticle!.author, true, !!follow);
   }
 
   async unfavoriteArticle(
@@ -340,15 +357,23 @@ export class ArticlesService {
 
     if (existingFavorite) {
       await this.favoriteRepository.remove(existingFavorite);
-      article.favoritesCount = Math.max(0, article.favoritesCount - 1);
-      await this.articleRepository.save(article);
+      // Atomic decrement with safety check (not negative)
+      await this.articleRepository.decrement({ id: article.id }, 'favoritesCount', 1);
     }
 
-    const follow = await this.userFollowRepository.findOne({
-      where: { followerId: userId, followingId: article.authorId },
-    });
+    const [updatedArticle, follow] = await Promise.all([
+      this.articleRepository.findOne({ where: { id: article.id }, relations: ['author'] }),
+      this.userFollowRepository.findOne({
+        where: { followerId: userId, followingId: article.authorId },
+      }),
+    ]);
 
-    return this.buildArticleResponse(article, article.author, false, !!follow);
+    if (updatedArticle!.favoritesCount < 0) {
+      await this.articleRepository.update(article.id, { favoritesCount: 0 });
+      updatedArticle!.favoritesCount = 0;
+    }
+
+    return this.buildArticleResponse(updatedArticle!, updatedArticle!.author, false, !!follow);
   }
 
   private async enrichArticles(

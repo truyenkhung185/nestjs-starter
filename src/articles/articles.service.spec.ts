@@ -18,6 +18,9 @@ describe('ArticlesService', () => {
       findOne: vi.fn(),
       findAndCount: vi.fn(),
       remove: vi.fn(),
+      update: vi.fn().mockResolvedValue(undefined),
+      increment: vi.fn().mockResolvedValue(undefined),
+      decrement: vi.fn().mockResolvedValue(undefined),
       createQueryBuilder: vi.fn(),
     };
 
@@ -123,7 +126,7 @@ describe('ArticlesService', () => {
       ).rejects.toThrow(ForbiddenException);
     });
 
-    it('should allow author to update article and regenerate slug on title change', async () => {
+    it('should allow author to update article and use partial update', async () => {
       const mockArticle = {
         id: 'art-1',
         slug: 'old-slug-12345678',
@@ -133,7 +136,15 @@ describe('ArticlesService', () => {
         author: { id: 'author-owner', email: 'owner@example.com' },
       };
 
-      mockArticleRepo.findOne.mockResolvedValue(mockArticle);
+      const updatedArticle = {
+        ...mockArticle,
+        title: 'New Brand Title',
+        slug: 'new-brand-title-12345678',
+      };
+
+      mockArticleRepo.findOne
+        .mockResolvedValueOnce(mockArticle)
+        .mockResolvedValueOnce(updatedArticle);
       mockFavoriteRepo.findOne.mockResolvedValue(null);
       mockUserFollowRepo.findOne.mockResolvedValue(null);
 
@@ -145,8 +156,7 @@ describe('ArticlesService', () => {
       );
 
       expect(result.title).toBe('New Brand Title');
-      expect(result.slug).toMatch(/^new-brand-title-[a-f0-9]{8}$/);
-      expect(mockArticleRepo.save).toHaveBeenCalled();
+      expect(mockArticleRepo.update).toHaveBeenCalled();
     });
 
     it('should allow admin (UserRole.ADMIN) to update any article', async () => {
@@ -159,7 +169,9 @@ describe('ArticlesService', () => {
         author: { id: 'author-owner', email: 'owner@example.com' },
       };
 
-      mockArticleRepo.findOne.mockResolvedValue(mockArticle);
+      mockArticleRepo.findOne
+        .mockResolvedValueOnce(mockArticle)
+        .mockResolvedValueOnce({ ...mockArticle, body: 'Admin updated content' });
 
       const result = await service.updateArticle(
         'some-slug-12345678',
@@ -201,7 +213,7 @@ describe('ArticlesService', () => {
   });
 
   describe('favorite & unfavorite', () => {
-    it('should favorite an article and increment count', async () => {
+    it('should favorite an article and atomically increment count', async () => {
       const mockArticle = {
         id: 'art-1',
         slug: 'fav-slug',
@@ -209,17 +221,20 @@ describe('ArticlesService', () => {
         authorId: 'author-1',
         author: { id: 'author-1', email: 'a@example.com' },
       };
-      mockArticleRepo.findOne.mockResolvedValue(mockArticle);
+      mockArticleRepo.findOne
+        .mockResolvedValueOnce(mockArticle)
+        .mockResolvedValueOnce({ ...mockArticle, favoritesCount: 1 });
       mockFavoriteRepo.findOne.mockResolvedValue(null);
 
       const result = await service.favoriteArticle('fav-slug', 'user-1');
 
       expect(mockFavoriteRepo.save).toHaveBeenCalled();
-      expect(mockArticle.favoritesCount).toBe(1);
+      expect(mockArticleRepo.increment).toHaveBeenCalledWith({ id: 'art-1' }, 'favoritesCount', 1);
       expect(result.favorited).toBe(true);
+      expect(result.favoritesCount).toBe(1);
     });
 
-    it('should unfavorite an article and decrement count', async () => {
+    it('should unfavorite an article and atomically decrement count', async () => {
       const mockArticle = {
         id: 'art-1',
         slug: 'fav-slug',
@@ -229,14 +244,17 @@ describe('ArticlesService', () => {
       };
       const existingFav = { id: 'fav-1', userId: 'user-1', articleId: 'art-1' };
 
-      mockArticleRepo.findOne.mockResolvedValue(mockArticle);
+      mockArticleRepo.findOne
+        .mockResolvedValueOnce(mockArticle)
+        .mockResolvedValueOnce({ ...mockArticle, favoritesCount: 1 });
       mockFavoriteRepo.findOne.mockResolvedValue(existingFav);
 
       const result = await service.unfavoriteArticle('fav-slug', 'user-1');
 
       expect(mockFavoriteRepo.remove).toHaveBeenCalledWith(existingFav);
-      expect(mockArticle.favoritesCount).toBe(1);
+      expect(mockArticleRepo.decrement).toHaveBeenCalledWith({ id: 'art-1' }, 'favoritesCount', 1);
       expect(result.favorited).toBe(false);
+      expect(result.favoritesCount).toBe(1);
     });
   });
 

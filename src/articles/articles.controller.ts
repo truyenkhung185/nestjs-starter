@@ -13,7 +13,6 @@ import {
   ApiBearerAuth,
   ApiOperation,
   ApiParam,
-  ApiQuery,
   ApiResponse,
   ApiTags,
 } from '@nestjs/swagger';
@@ -21,10 +20,11 @@ import { ArticlesService } from './articles.service.js';
 import { CreateArticleDto } from './dto/create-article.dto.js';
 import { UpdateArticleDto } from './dto/update-article.dto.js';
 import { QueryArticlesDto } from './dto/query-articles.dto.js';
+import { QueryFeedDto } from './dto/query-feed.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { AuthUser } from '../auth/interfaces/auth-user.interface.js';
-import { ARTICLE_FIELD_LIMITS } from './constants/article.constants.js';
 
 @ApiTags('Articles')
 @Controller('articles')
@@ -44,6 +44,7 @@ export class ArticlesController {
     return await this.articlesService.createArticle(user.id, createArticleDto);
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Get()
   @ApiOperation({ summary: 'List articles with optional filtering (tag, author, favorited)' })
   @ApiResponse({ status: 200, description: 'Articles list and count' })
@@ -58,32 +59,20 @@ export class ArticlesController {
   @Get('feed')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get recent articles from authors you follow' })
-  @ApiQuery({
-    name: 'limit',
-    required: false,
-    type: Number,
-    description: `Limit items (default ${ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_LIMIT})`,
-  })
-  @ApiQuery({
-    name: 'offset',
-    required: false,
-    type: Number,
-    description: `Offset items (default ${ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_OFFSET})`,
-  })
   @ApiResponse({ status: 200, description: 'Feed articles list and count' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getFeed(
     @CurrentUser() user: AuthUser,
-    @Query('limit') limit?: number,
-    @Query('offset') offset?: number,
+    @Query() query: QueryFeedDto,
   ) {
     return await this.articlesService.getFeed(
       user.id,
-      limit ? Number(limit) : ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_LIMIT,
-      offset ? Number(offset) : ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_OFFSET,
+      query.limit,
+      query.offset,
     );
   }
 
+  @UseGuards(OptionalJwtAuthGuard)
   @Get(':slug')
   @ApiOperation({ summary: 'Get a single article by slug' })
   @ApiParam({ name: 'slug', description: 'Article slug' })

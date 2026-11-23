@@ -69,7 +69,7 @@ export class UsersController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: AVATAR_MAX_BYTES }),
-          new FileTypeValidator({ fileType: /(jpeg|jpg|png|webp|gif)$/i }),
+          new FileTypeValidator({ fileType: /^image\/(jpeg|png|webp|gif)$/i }),
         ],
         fileIsRequired: false,
       }),
