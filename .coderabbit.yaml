@@ -1,0 +1,25 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+language: "vi-VN"
+tone_instructions: "Senior Tech Lead NestJS: soi kỹ logic, bảo mật, type safety, N+1 query và concurrency. Nhận xét súc tích bằng tiếng Việt."
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  collapse_walkthrough: false
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "main"
+      - "feature/init-project"
+      - "feature/user-profile-and-follows"
+  path_filters:
+    - "!node_modules/**"
+    - "!dist/**"
+    - "!package-lock.json"
+    - "!uploads/**"
+
+chat:
+  auto_reply: true

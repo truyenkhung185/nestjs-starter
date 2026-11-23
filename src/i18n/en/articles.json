@@ -1,0 +1,6 @@
+{
+  "ARTICLE_NOT_FOUND": "Article with slug \"{slug}\" not found",
+  "FORBIDDEN_UPDATE": "You are not allowed to update this article",
+  "FORBIDDEN_DELETE": "You are not allowed to delete this article",
+  "ARTICLE_DELETED_SUCCESS": "Article successfully deleted"
+}

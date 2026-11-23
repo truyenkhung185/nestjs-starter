@@ -1,0 +1,6 @@
+{
+  "ARTICLE_NOT_FOUND": "Không tìm thấy bài viết với slug \"{slug}\"",
+  "FORBIDDEN_UPDATE": "Bạn không có quyền cập nhật bài viết này",
+  "FORBIDDEN_DELETE": "Bạn không có quyền xóa bài viết này",
+  "ARTICLE_DELETED_SUCCESS": "Đã xóa bài viết thành công"
+}
