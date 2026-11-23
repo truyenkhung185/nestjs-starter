@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
 language: "vi-VN"
-tone_instructions: "Hãy đóng vai trò một Senior Backend Tech Lead chuyên về NestJS và TypeScript. Khi review code, hãy tập trung soi kỹ: tính đúng đắn của logic nghiệp vụ, bảo mật (SQL Injection, XSS, phân quyền), tính an toàn kiểu dữ liệu (tránh any), tối ưu truy vấn cơ sở dữ liệu (N+1 query, index), và khả năng xử lý concurrency/race conditions. Nhận xét ngắn gọn, đi thẳng vào vấn đề và đưa ra code snippet mẫu nếu cần sửa."
+tone_instructions: "Senior Tech Lead NestJS: soi kỹ logic, bảo mật, type safety, N+1 query và concurrency. Nhận xét súc tích bằng tiếng Việt."
 
 reviews:
   profile: "chill"
