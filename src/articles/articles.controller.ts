@@ -23,6 +23,8 @@ import { UpdateArticleDto } from './dto/update-article.dto.js';
 import { QueryArticlesDto } from './dto/query-articles.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
+import { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import { ARTICLE_FIELD_LIMITS } from './constants/article.constants.js';
 
 @ApiTags('Articles')
 @Controller('articles')
@@ -36,7 +38,7 @@ export class ArticlesController {
   @ApiResponse({ status: 201, description: 'Article created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async createArticle(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthUser,
     @Body() createArticleDto: CreateArticleDto,
   ) {
     return await this.articlesService.createArticle(user.id, createArticleDto);
@@ -47,7 +49,7 @@ export class ArticlesController {
   @ApiResponse({ status: 200, description: 'Articles list and count' })
   async listArticles(
     @Query() query: QueryArticlesDto,
-    @CurrentUser() user?: any,
+    @CurrentUser() user?: AuthUser,
   ) {
     return await this.articlesService.listArticles(query, user?.id);
   }
@@ -56,19 +58,29 @@ export class ArticlesController {
   @Get('feed')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get recent articles from authors you follow' })
-  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Limit items (default 20)' })
-  @ApiQuery({ name: 'offset', required: false, type: Number, description: 'Offset items (default 0)' })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: `Limit items (default ${ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_LIMIT})`,
+  })
+  @ApiQuery({
+    name: 'offset',
+    required: false,
+    type: Number,
+    description: `Offset items (default ${ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_OFFSET})`,
+  })
   @ApiResponse({ status: 200, description: 'Feed articles list and count' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getFeed(
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthUser,
     @Query('limit') limit?: number,
     @Query('offset') offset?: number,
   ) {
     return await this.articlesService.getFeed(
       user.id,
-      limit ? Number(limit) : 20,
-      offset ? Number(offset) : 0,
+      limit ? Number(limit) : ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_LIMIT,
+      offset ? Number(offset) : ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_OFFSET,
     );
   }
 
@@ -79,7 +91,7 @@ export class ArticlesController {
   @ApiResponse({ status: 404, description: 'Article not found' })
   async getArticle(
     @Param('slug') slug: string,
-    @CurrentUser() user?: any,
+    @CurrentUser() user?: AuthUser,
   ) {
     return await this.articlesService.getArticleBySlug(slug, user?.id);
   }
@@ -95,7 +107,7 @@ export class ArticlesController {
   @ApiResponse({ status: 404, description: 'Article not found' })
   async updateArticle(
     @Param('slug') slug: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthUser,
     @Body() updateArticleDto: UpdateArticleDto,
   ) {
     return await this.articlesService.updateArticle(
@@ -117,7 +129,7 @@ export class ArticlesController {
   @ApiResponse({ status: 404, description: 'Article not found' })
   async deleteArticle(
     @Param('slug') slug: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthUser,
   ) {
     return await this.articlesService.deleteArticle(slug, user.id, user.role);
   }
@@ -132,7 +144,7 @@ export class ArticlesController {
   @ApiResponse({ status: 404, description: 'Article not found' })
   async favoriteArticle(
     @Param('slug') slug: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthUser,
   ) {
     return await this.articlesService.favoriteArticle(slug, user.id);
   }
@@ -147,7 +159,7 @@ export class ArticlesController {
   @ApiResponse({ status: 404, description: 'Article not found' })
   async unfavoriteArticle(
     @Param('slug') slug: string,
-    @CurrentUser() user: any,
+    @CurrentUser() user: AuthUser,
   ) {
     return await this.articlesService.unfavoriteArticle(slug, user.id);
   }

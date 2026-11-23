@@ -1,6 +1,7 @@
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
+import { ARTICLE_FIELD_LIMITS } from '../constants/article.constants.js';
 
 export class QueryArticlesDto {
   @ApiProperty({ required: false, description: 'Filter by tag' })
@@ -18,17 +19,25 @@ export class QueryArticlesDto {
   @IsString()
   favorited?: string;
 
-  @ApiProperty({ required: false, default: 20, description: 'Limit number of results' })
+  @ApiProperty({
+    required: false,
+    default: ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_LIMIT,
+    description: 'Limit number of results',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
-  limit?: number = 20;
+  limit?: number = ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_LIMIT;
 
-  @ApiProperty({ required: false, default: 0, description: 'Offset number of results' })
+  @ApiProperty({
+    required: false,
+    default: ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_OFFSET,
+    description: 'Offset number of results',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
-  offset?: number = 0;
+  offset?: number = ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_OFFSET;
 }

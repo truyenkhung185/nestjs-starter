@@ -1,11 +1,14 @@
 import { IsArray, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
+import { ARTICLE_FIELD_LIMITS } from '../constants/article.constants.js';
 
 export class CreateArticleDto {
   @ApiProperty({ example: 'How to build scalable NestJS applications', description: 'Article title' })
   @IsString()
   @IsNotEmpty()
-  @MaxLength(255)
+  @MaxLength(ARTICLE_FIELD_LIMITS.TITLE_MAX_LENGTH, {
+    message: `Title must not exceed ${ARTICLE_FIELD_LIMITS.TITLE_MAX_LENGTH} characters`,
+  })
   title: string;
 
   @ApiProperty({
@@ -15,7 +18,9 @@ export class CreateArticleDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(ARTICLE_FIELD_LIMITS.DESCRIPTION_MAX_LENGTH, {
+    message: `Description must not exceed ${ARTICLE_FIELD_LIMITS.DESCRIPTION_MAX_LENGTH} characters`,
+  })
   description?: string;
 
   @ApiProperty({

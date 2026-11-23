@@ -6,13 +6,15 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
 import * as crypto from 'crypto';
+import { I18nService } from 'nestjs-i18n';
 import { Article } from './entities/article.entity.js';
 import { ArticleFavorite } from './entities/article-favorite.entity.js';
 import { UserFollow } from '../users/entities/user-follow.entity.js';
-import { User } from '../users/entities/user.entity.js';
+import { User, UserRole } from '../users/entities/user.entity.js';
 import { CreateArticleDto } from './dto/create-article.dto.js';
 import { UpdateArticleDto } from './dto/update-article.dto.js';
 import { QueryArticlesDto } from './dto/query-articles.dto.js';
+import { ARTICLE_FIELD_LIMITS } from './constants/article.constants.js';
 
 export interface FormattedArticle {
   id: string;
@@ -46,6 +48,7 @@ export class ArticlesService {
     private readonly userFollowRepository: Repository<UserFollow>,
     @InjectRepository(User)
     private readonly userRepository: Repository<User>,
+    private readonly i18n: I18nService,
   ) {}
 
   private slugify(title: string): string {
@@ -92,7 +95,10 @@ export class ArticlesService {
     });
 
     if (!article) {
-      throw new NotFoundException(`Article with slug "${slug}" not found`);
+      throw new NotFoundException(
+        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
+          `Article with slug "${slug}" not found`,
+      );
     }
 
     let favorited = false;
@@ -126,11 +132,17 @@ export class ArticlesService {
     });
 
     if (!article) {
-      throw new NotFoundException(`Article with slug "${slug}" not found`);
+      throw new NotFoundException(
+        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
+          `Article with slug "${slug}" not found`,
+      );
     }
 
-    if (article.authorId !== userId && userRole !== 'admin') {
-      throw new ForbiddenException('You are not allowed to update this article');
+    if (article.authorId !== userId && userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        this.i18n.t('articles.FORBIDDEN_UPDATE') ||
+          'You are not allowed to update this article',
+      );
     }
 
     if (updateArticleDto.title && updateArticleDto.title !== article.title) {
@@ -169,15 +181,25 @@ export class ArticlesService {
     const article = await this.articleRepository.findOne({ where: { slug } });
 
     if (!article) {
-      throw new NotFoundException(`Article with slug "${slug}" not found`);
+      throw new NotFoundException(
+        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
+          `Article with slug "${slug}" not found`,
+      );
     }
 
-    if (article.authorId !== userId && userRole !== 'admin') {
-      throw new ForbiddenException('You are not allowed to delete this article');
+    if (article.authorId !== userId && userRole !== UserRole.ADMIN) {
+      throw new ForbiddenException(
+        this.i18n.t('articles.FORBIDDEN_DELETE') ||
+          'You are not allowed to delete this article',
+      );
     }
 
     await this.articleRepository.remove(article);
-    return { message: 'Article successfully deleted' };
+    return {
+      message:
+        this.i18n.t('articles.ARTICLE_DELETED_SUCCESS') ||
+        'Article successfully deleted',
+    };
   }
 
   async listArticles(
@@ -213,8 +235,8 @@ export class ArticlesService {
       }
     }
 
-    const limit = query.limit ?? 20;
-    const offset = query.offset ?? 0;
+    const limit = query.limit ?? ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_LIMIT;
+    const offset = query.offset ?? ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_OFFSET;
 
     qb.skip(offset).take(limit);
 
@@ -226,8 +248,8 @@ export class ArticlesService {
 
   async getFeed(
     userId: string,
-    limit: number = 20,
-    offset: number = 0,
+    limit: number = ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_LIMIT,
+    offset: number = ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_OFFSET,
   ): Promise<{ articles: FormattedArticle[]; articlesCount: number }> {
     // Get list of followed authors
     const follows = await this.userFollowRepository.find({
@@ -262,7 +284,10 @@ export class ArticlesService {
     });
 
     if (!article) {
-      throw new NotFoundException(`Article with slug "${slug}" not found`);
+      throw new NotFoundException(
+        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
+          `Article with slug "${slug}" not found`,
+      );
     }
 
     const existingFavorite = await this.favoriteRepository.findOne({
@@ -270,13 +295,20 @@ export class ArticlesService {
     });
 
     if (!existingFavorite) {
-      const fav = this.favoriteRepository.create({
-        userId,
-        articleId: article.id,
-      });
-      await this.favoriteRepository.save(fav);
-      article.favoritesCount += 1;
-      await this.articleRepository.save(article);
+      try {
+        const fav = this.favoriteRepository.create({
+          userId,
+          articleId: article.id,
+        });
+        await this.favoriteRepository.save(fav);
+        article.favoritesCount += 1;
+        await this.articleRepository.save(article);
+      } catch (err: any) {
+        // Handle race condition duplicate key gracefully
+        if (!err?.code?.includes('23505') && !err?.message?.includes('duplicate key')) {
+          throw err;
+        }
+      }
     }
 
     const follow = await this.userFollowRepository.findOne({
@@ -296,7 +328,10 @@ export class ArticlesService {
     });
 
     if (!article) {
-      throw new NotFoundException(`Article with slug "${slug}" not found`);
+      throw new NotFoundException(
+        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
+          `Article with slug "${slug}" not found`,
+      );
     }
 
     const existingFavorite = await this.favoriteRepository.findOne({
