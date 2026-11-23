@@ -1,0 +1,16 @@
+{
+  "USER_NOT_FOUND": "User with ID {id} not found",
+  "PROFILE_NOT_FOUND": "User profile not found",
+  "CANNOT_FOLLOW_SELF": "You cannot follow yourself",
+  "CANNOT_UNFOLLOW_SELF": "You cannot unfollow yourself",
+  "CANNOT_FOLLOW_INACTIVE": "Cannot follow an inactive user",
+  "ALREADY_FOLLOWING": "You are already following this user",
+  "NOT_FOLLOWING": "You are not following this user",
+  "FOLLOW_SUCCESS": "Successfully followed {name}",
+  "UNFOLLOW_SUCCESS": "Successfully unfollowed {name}",
+  "INVALID_AVATAR_TYPE": "Invalid avatar file type. Allowed formats: JPEG, PNG, WEBP, GIF",
+  "AVATAR_TOO_LARGE": "Avatar file size must not exceed 5MB",
+  "ATTACHMENT_NOT_FOUND": "Attachment with ID {id} not found",
+  "FORBIDDEN_FILE_ACCESS": "You do not have permission to access this private file",
+  "PHYSICAL_FILE_NOT_FOUND": "The requested physical file was not found on server"
+}

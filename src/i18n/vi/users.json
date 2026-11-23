@@ -1,0 +1,16 @@
+{
+  "USER_NOT_FOUND": "Không tìm thấy người dùng với mã {id}",
+  "PROFILE_NOT_FOUND": "Không tìm thấy hồ sơ người dùng",
+  "CANNOT_FOLLOW_SELF": "Bạn không thể tự theo dõi chính mình",
+  "CANNOT_UNFOLLOW_SELF": "Bạn không thể tự hủy theo dõi chính mình",
+  "CANNOT_FOLLOW_INACTIVE": "Không thể theo dõi người dùng đang bị khóa",
+  "ALREADY_FOLLOWING": "Bạn đã theo dõi người dùng này rồi",
+  "NOT_FOLLOWING": "Bạn chưa theo dõi người dùng này",
+  "FOLLOW_SUCCESS": "Đã theo dõi thành công {name}",
+  "UNFOLLOW_SUCCESS": "Đã hủy theo dõi thành công {name}",
+  "INVALID_AVATAR_TYPE": "Loại tệp ảnh đại diện không hợp lệ. Chỉ chấp nhận: JPEG, PNG, WEBP, GIF",
+  "AVATAR_TOO_LARGE": "Kích thước tệp ảnh đại diện không được vượt quá 5MB",
+  "ATTACHMENT_NOT_FOUND": "Không tìm thấy tệp đính kèm với mã {id}",
+  "FORBIDDEN_FILE_ACCESS": "Bạn không có quyền truy cập tệp riêng tư này",
+  "PHYSICAL_FILE_NOT_FOUND": "Không tìm thấy tệp vật lý trên máy chủ"
+}

@@ -1,10 +1,12 @@
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ClassSerializerInterceptor, ValidationPipe } from '@nestjs/common';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import * as path from 'path';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Global Validation Pipe
   app.useGlobalPipes(
@@ -18,10 +20,18 @@ async function bootstrap() {
   // Global ClassSerializerInterceptor to respect @Exclude() decorators
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
+  // Serve static assets for public uploads folder: /public/...
+  const publicUploadPath = path.join(process.cwd(), 'uploads', 'public');
+  app.useStaticAssets(publicUploadPath, {
+    prefix: '/public/',
+  });
+
   // Setup Swagger Documentation
   const config = new DocumentBuilder()
     .setTitle('NestJS Starter API')
-    .setDescription('NestJS Starter API documentation with Swagger, i18n, TypeORM, and JWT Authentication')
+    .setDescription(
+      'NestJS Starter API documentation with Swagger, i18n, TypeORM, JWT Authentication, Attachments, and User Follows',
+    )
     .setVersion('1.0')
     .addBearerAuth(
       {
