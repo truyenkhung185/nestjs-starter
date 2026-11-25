@@ -93,7 +93,7 @@ export class ArticlesService {
   ): Promise<FormattedArticle> {
     const article = await this.articleRepository.findOne({
       where: { slug },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     if (!article) {
@@ -130,7 +130,7 @@ export class ArticlesService {
   ): Promise<FormattedArticle> {
     const article = await this.articleRepository.findOne({
       where: { slug },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     if (!article) {
@@ -169,7 +169,7 @@ export class ArticlesService {
 
     const updated = await this.articleRepository.findOne({
       where: { id: article.id },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     const [fav, follow] = await Promise.all([
@@ -278,7 +278,7 @@ export class ArticlesService {
 
     const [articles, articlesCount] = await this.articleRepository.findAndCount({
       where: { authorId: In(followingIds) },
-      relations: ['author'],
+      relations: { author: true },
       order: { createdAt: 'DESC' },
       skip: offset,
       take: limit,
@@ -294,7 +294,7 @@ export class ArticlesService {
   ): Promise<FormattedArticle> {
     const article = await this.articleRepository.findOne({
       where: { slug },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     if (!article) {
@@ -326,7 +326,7 @@ export class ArticlesService {
     }
 
     const [updatedArticle, follow] = await Promise.all([
-      this.articleRepository.findOne({ where: { id: article.id }, relations: ['author'] }),
+      this.articleRepository.findOne({ where: { id: article.id }, relations: { author: true } }),
       this.userFollowRepository.findOne({
         where: { followerId: userId, followingId: article.authorId },
       }),
@@ -341,7 +341,7 @@ export class ArticlesService {
   ): Promise<FormattedArticle> {
     const article = await this.articleRepository.findOne({
       where: { slug },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     if (!article) {
@@ -362,7 +362,7 @@ export class ArticlesService {
     }
 
     const [updatedArticle, follow] = await Promise.all([
-      this.articleRepository.findOne({ where: { id: article.id }, relations: ['author'] }),
+      this.articleRepository.findOne({ where: { id: article.id }, relations: { author: true } }),
       this.userFollowRepository.findOne({
         where: { followerId: userId, followingId: article.authorId },
       }),

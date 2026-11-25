@@ -1,0 +1,7 @@
+{
+  "ARTICLE_NOT_FOUND": "Không tìm thấy bài viết với slug \"{slug}\"",
+  "COMMENT_NOT_FOUND": "Không tìm thấy bình luận với mã \"{id}\"",
+  "FORBIDDEN_DELETE": "Bạn không có quyền xóa bình luận này",
+  "COMMENT_DELETED_SUCCESS": "Đã xóa bình luận thành công",
+  "AUTHOR_NOT_FOUND": "Không tìm thấy tác giả"
+}

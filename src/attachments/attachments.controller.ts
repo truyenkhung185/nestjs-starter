@@ -17,7 +17,7 @@ import type { Response } from 'express';
 import { AttachmentsService } from './attachments.service.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
-import { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
 
 @ApiTags('Attachments')
 @Controller('attachments')

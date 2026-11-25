@@ -12,7 +12,7 @@ import { User } from './entities/user.entity.js';
 import { UserFollow } from './entities/user-follow.entity.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { AttachmentsService } from '../attachments/attachments.service.js';
-import { AttachmentAccess, Attachment } from '../attachments/entities/attachment.entity.js';
+import { AttachmentAccess } from '../attachments/entities/attachment.entity.js';
 import { ATTACHABLE_TYPES } from './constants/user.constants.js';
 
 export interface UserProfileResponse {
