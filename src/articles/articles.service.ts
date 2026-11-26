@@ -55,14 +55,17 @@ export class ArticlesService {
 
   private slugify(title: string): string {
     const baseSlug = title
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[đĐ]/g, 'd')
       .toLowerCase()
       .trim()
-      .replace(/[^\w\s-]/g, '')
+      .replace(/[^a-z0-9\s-]/g, '')
       .replace(/[\s_-]+/g, '-')
       .replace(/^-+|-+$/g, '');
 
     const uniqueSuffix = crypto.randomBytes(4).toString('hex');
-    return `${baseSlug}-${uniqueSuffix}`;
+    return baseSlug ? `${baseSlug}-${uniqueSuffix}` : uniqueSuffix;
   }
 
   async createArticle(
@@ -93,7 +96,7 @@ export class ArticlesService {
   ): Promise<FormattedArticle> {
     const article = await this.articleRepository.findOne({
       where: { slug },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     if (!article) {
@@ -130,7 +133,7 @@ export class ArticlesService {
   ): Promise<FormattedArticle> {
     const article = await this.articleRepository.findOne({
       where: { slug },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     if (!article) {
@@ -169,7 +172,7 @@ export class ArticlesService {
 
     const updated = await this.articleRepository.findOne({
       where: { id: article.id },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     const [fav, follow] = await Promise.all([
@@ -220,7 +223,8 @@ export class ArticlesService {
     const qb = this.articleRepository
       .createQueryBuilder('article')
       .leftJoinAndSelect('article.author', 'author')
-      .orderBy('article.createdAt', 'DESC');
+      .orderBy('article.createdAt', 'DESC')
+      .addOrderBy('article.id', 'DESC');
 
     if (query.tag) {
       qb.andWhere(':tag = ANY(article.tagList)', { tag: query.tag });
@@ -265,7 +269,6 @@ export class ArticlesService {
     limit: number = ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_LIMIT,
     offset: number = ARTICLE_FIELD_LIMITS.DEFAULT_PAGE_OFFSET,
   ): Promise<{ articles: FormattedArticle[]; articlesCount: number }> {
-    // Get list of followed authors
     const follows = await this.userFollowRepository.find({
       where: { followerId: userId },
     });
@@ -278,8 +281,8 @@ export class ArticlesService {
 
     const [articles, articlesCount] = await this.articleRepository.findAndCount({
       where: { authorId: In(followingIds) },
-      relations: ['author'],
-      order: { createdAt: 'DESC' },
+      relations: { author: true },
+      order: { createdAt: 'DESC', id: 'DESC' },
       skip: offset,
       take: limit,
     });
@@ -294,7 +297,7 @@ export class ArticlesService {
   ): Promise<FormattedArticle> {
     const article = await this.articleRepository.findOne({
       where: { slug },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     if (!article) {
@@ -314,9 +317,8 @@ export class ArticlesService {
           userId,
           articleId: article.id,
         });
+        // DB trigger `trg_article_favorites_count` automatically increments articles.favorites_count
         await this.favoriteRepository.save(fav);
-        // Atomic DB increment so concurrent favorites never lose counts
-        await this.articleRepository.increment({ id: article.id }, 'favoritesCount', 1);
       } catch (err: any) {
         // Handle race condition duplicate key gracefully
         if (!err?.code?.includes('23505') && !err?.message?.includes('duplicate key')) {
@@ -326,7 +328,7 @@ export class ArticlesService {
     }
 
     const [updatedArticle, follow] = await Promise.all([
-      this.articleRepository.findOne({ where: { id: article.id }, relations: ['author'] }),
+      this.articleRepository.findOne({ where: { id: article.id }, relations: { author: true } }),
       this.userFollowRepository.findOne({
         where: { followerId: userId, followingId: article.authorId },
       }),
@@ -341,7 +343,7 @@ export class ArticlesService {
   ): Promise<FormattedArticle> {
     const article = await this.articleRepository.findOne({
       where: { slug },
-      relations: ['author'],
+      relations: { author: true },
     });
 
     if (!article) {
@@ -356,22 +358,16 @@ export class ArticlesService {
     });
 
     if (existingFavorite) {
+      // DB trigger `trg_article_favorites_count` automatically decrements articles.favorites_count
       await this.favoriteRepository.remove(existingFavorite);
-      // Atomic decrement with safety check (not negative)
-      await this.articleRepository.decrement({ id: article.id }, 'favoritesCount', 1);
     }
 
     const [updatedArticle, follow] = await Promise.all([
-      this.articleRepository.findOne({ where: { id: article.id }, relations: ['author'] }),
+      this.articleRepository.findOne({ where: { id: article.id }, relations: { author: true } }),
       this.userFollowRepository.findOne({
         where: { followerId: userId, followingId: article.authorId },
       }),
     ]);
-
-    if (updatedArticle!.favoritesCount < 0) {
-      await this.articleRepository.update(article.id, { favoritesCount: 0 });
-      updatedArticle!.favoritesCount = 0;
-    }
 
     return this.buildArticleResponse(updatedArticle!, updatedArticle!.author, false, !!follow);
   }

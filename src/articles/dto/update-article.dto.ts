@@ -1,24 +1,34 @@
-import { IsArray, IsOptional, IsString, MaxLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsArray,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  ValidateIf,
+} from 'class-validator';
+import { Transform } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 import { ARTICLE_FIELD_LIMITS } from '../constants/article.constants.js';
 
 export class UpdateArticleDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'Updated title of article',
     description: 'Updated article title',
-    required: false,
   })
-  @IsOptional()
+  @ValidateIf((o: UpdateArticleDto) => o.title !== undefined)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @IsNotEmpty({ message: 'Title must not be empty' })
   @MaxLength(ARTICLE_FIELD_LIMITS.TITLE_MAX_LENGTH, {
     message: `Title must not exceed ${ARTICLE_FIELD_LIMITS.TITLE_MAX_LENGTH} characters`,
   })
   title?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'Updated summary of the article',
     description: 'Updated short description',
-    required: false,
   })
   @IsOptional()
   @IsString()
@@ -27,22 +37,24 @@ export class UpdateArticleDto {
   })
   description?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: 'Updated full markdown body content...',
     description: 'Updated article body',
-    required: false,
   })
-  @IsOptional()
+  @ValidateIf((o: UpdateArticleDto) => o.body !== undefined)
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
+  @IsNotEmpty({ message: 'Body must not be empty' })
   body?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     example: ['nestjs', 'typeorm'],
     description: 'Updated tag list',
-    required: false,
     type: [String],
   })
-  @IsOptional()
+  @ValidateIf((o: UpdateArticleDto) => o.tagList !== undefined)
   @IsArray()
   @IsString({ each: true })
   tagList?: string[];

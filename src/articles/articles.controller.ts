@@ -24,7 +24,7 @@ import { QueryFeedDto } from './dto/query-feed.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
-import { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
 
 @ApiTags('Articles')
 @Controller('articles')

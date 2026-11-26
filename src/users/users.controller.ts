@@ -29,7 +29,7 @@ import { UsersService } from './users.service.js';
 import { UpdateUserDto } from './dto/update-user.dto.js';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
-import { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
 import { AVATAR_MAX_BYTES } from './constants/user.constants.js';
 
 @ApiTags('Users')

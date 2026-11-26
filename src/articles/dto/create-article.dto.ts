@@ -1,9 +1,13 @@
 import { IsArray, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { Transform } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 import { ARTICLE_FIELD_LIMITS } from '../constants/article.constants.js';
 
 export class CreateArticleDto {
   @ApiProperty({ example: 'How to build scalable NestJS applications', description: 'Article title' })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty()
   @MaxLength(ARTICLE_FIELD_LIMITS.TITLE_MAX_LENGTH, {
@@ -27,6 +31,9 @@ export class CreateArticleDto {
     example: 'Here is the full markdown content of the article...',
     description: 'Full body content of the article',
   })
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim() : value,
+  )
   @IsString()
   @IsNotEmpty()
   body: string;
