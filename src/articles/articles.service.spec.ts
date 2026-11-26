@@ -1,6 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
 import { ArticlesService } from './articles.service.js';
+import { UpdateArticleDto } from './dto/update-article.dto.js';
 import { UserRole } from '../users/entities/user.entity.js';
 
 describe('ArticlesService', () => {
@@ -10,8 +13,20 @@ describe('ArticlesService', () => {
   let mockUserFollowRepo: any;
   let mockUserRepo: any;
   let mockI18n: any;
+  let mockQb: any;
 
   beforeEach(() => {
+    mockQb = {
+      leftJoinAndSelect: vi.fn().mockReturnThis(),
+      orderBy: vi.fn().mockReturnThis(),
+      addOrderBy: vi.fn().mockReturnThis(),
+      andWhere: vi.fn().mockReturnThis(),
+      innerJoin: vi.fn().mockReturnThis(),
+      skip: vi.fn().mockReturnThis(),
+      take: vi.fn().mockReturnThis(),
+      getManyAndCount: vi.fn().mockResolvedValue([[], 0]),
+    };
+
     mockArticleRepo = {
       create: vi.fn((data) => ({ ...data, id: 'article-id-123', favoritesCount: 0 })),
       save: vi.fn((art) => Promise.resolve(art)),
@@ -21,20 +36,20 @@ describe('ArticlesService', () => {
       update: vi.fn().mockResolvedValue(undefined),
       increment: vi.fn().mockResolvedValue(undefined),
       decrement: vi.fn().mockResolvedValue(undefined),
-      createQueryBuilder: vi.fn(),
+      createQueryBuilder: vi.fn(() => mockQb),
     };
 
     mockFavoriteRepo = {
       create: vi.fn((data) => ({ ...data, id: 'fav-id-123' })),
       save: vi.fn((fav) => Promise.resolve(fav)),
       findOne: vi.fn(),
-      find: vi.fn(),
+      find: vi.fn().mockResolvedValue([]),
       remove: vi.fn(),
     };
 
     mockUserFollowRepo = {
       findOne: vi.fn(),
-      find: vi.fn(),
+      find: vi.fn().mockResolvedValue([]),
     };
 
     mockUserRepo = {
@@ -54,7 +69,7 @@ describe('ArticlesService', () => {
     );
   });
 
-  describe('createArticle', () => {
+  describe('createArticle & slugify', () => {
     it('should generate a unique slug and save article', async () => {
       mockUserRepo.findOne.mockResolvedValue({
         id: 'author-1',
@@ -74,6 +89,132 @@ describe('ArticlesService', () => {
       expect(result.tagList).toEqual(['nestjs', 'backend']);
       expect(result.author.id).toBe('author-1');
       expect(mockArticleRepo.save).toHaveBeenCalled();
+    });
+
+    it('should properly normalize Vietnamese diacritics and đ/Đ in slug', async () => {
+      mockUserRepo.findOne.mockResolvedValue({
+        id: 'author-1',
+        email: 'author@example.com',
+        fullName: 'Author One',
+      });
+
+      const res1 = await service.createArticle('author-1', {
+        title: 'Học NestJS cơ bản',
+        body: 'Nội dung',
+      });
+      expect(res1.slug).toMatch(/^hoc-nestjs-co-ban-[a-f0-9]{8}$/);
+
+      const res2 = await service.createArticle('author-1', {
+        title: 'Đi học Đắk Lắk',
+        body: 'Nội dung',
+      });
+      expect(res2.slug).toMatch(/^di-hoc-dak-lak-[a-f0-9]{8}$/);
+    });
+
+    it('should not produce a leading hyphen when title has only symbols', async () => {
+      mockUserRepo.findOne.mockResolvedValue({
+        id: 'author-1',
+        email: 'author@example.com',
+        fullName: 'Author One',
+      });
+
+      const res = await service.createArticle('author-1', {
+        title: '!!!@@@',
+        body: 'Body',
+      });
+      expect(res.slug).toMatch(/^[a-f0-9]{8}$/);
+    });
+  });
+
+  describe('listArticles', () => {
+    const sampleArticle = {
+      id: 'art-1',
+      slug: 'nestjs-post-12345678',
+      title: 'NestJS Post',
+      description: 'Desc',
+      body: 'Body',
+      tagList: ['nestjs'],
+      favoritesCount: 1,
+      authorId: 'author-1',
+      author: {
+        id: 'author-1',
+        email: 'author@example.com',
+        fullName: 'Author',
+        bio: null,
+        avatarUrl: null,
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it('should apply deterministic ordering (createdAt DESC, id DESC) and pagination', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[sampleArticle], 1]);
+
+      const result = await service.listArticles({ limit: 5, offset: 10 });
+
+      expect(mockQb.orderBy).toHaveBeenCalledWith('article.createdAt', 'DESC');
+      expect(mockQb.addOrderBy).toHaveBeenCalledWith('article.id', 'DESC');
+      expect(mockQb.skip).toHaveBeenCalledWith(10);
+      expect(mockQb.take).toHaveBeenCalledWith(5);
+      expect(result.articlesCount).toBe(1);
+      expect(result.articles).toHaveLength(1);
+    });
+
+    it('should filter by tag and author email', async () => {
+      mockQb.getManyAndCount.mockResolvedValue([[sampleArticle], 1]);
+
+      await service.listArticles({ tag: 'nestjs', author: 'author@example.com' });
+
+      expect(mockQb.andWhere).toHaveBeenCalledWith(':tag = ANY(article.tagList)', {
+        tag: 'nestjs',
+      });
+      expect(mockQb.andWhere).toHaveBeenCalledWith('author.email = :authorEmail', {
+        authorEmail: 'author@example.com',
+      });
+    });
+
+    it('should filter by favorited using email without UUID comparison', async () => {
+      mockUserRepo.findOne.mockResolvedValue({ id: 'fan-uuid-1', email: 'fan@example.com' });
+      mockQb.getManyAndCount.mockResolvedValue([[sampleArticle], 1]);
+
+      await service.listArticles({ favorited: 'fan@example.com' });
+
+      expect(mockUserRepo.findOne).toHaveBeenCalledWith({
+        where: { email: 'fan@example.com' },
+      });
+      expect(mockQb.innerJoin).toHaveBeenCalledWith(
+        'article_favorites',
+        'favFilter',
+        'favFilter.article_id = article.id AND favFilter.user_id = :favUserId',
+        { favUserId: 'fan-uuid-1' },
+      );
+    });
+
+    it('should filter by favorited using UUID when valid UUID is provided', async () => {
+      const fanUuid = '123e4567-e89b-12d3-a456-426614174000';
+      mockUserRepo.findOne.mockResolvedValue({ id: fanUuid, email: 'fan@example.com' });
+      mockQb.getManyAndCount.mockResolvedValue([[sampleArticle], 1]);
+
+      await service.listArticles({ favorited: fanUuid });
+
+      expect(mockUserRepo.findOne).toHaveBeenCalledWith({
+        where: { id: fanUuid },
+      });
+      expect(mockQb.innerJoin).toHaveBeenCalledWith(
+        'article_favorites',
+        'favFilter',
+        'favFilter.article_id = article.id AND favFilter.user_id = :favUserId',
+        { favUserId: fanUuid },
+      );
+    });
+
+    it('should return empty result immediately when favorited user does not exist', async () => {
+      mockUserRepo.findOne.mockResolvedValue(null);
+
+      const result = await service.listArticles({ favorited: 'nobody@example.com' });
+
+      expect(result).toEqual({ articles: [], articlesCount: 0 });
+      expect(mockQb.getManyAndCount).not.toHaveBeenCalled();
     });
   });
 
@@ -184,6 +325,36 @@ describe('ArticlesService', () => {
     });
   });
 
+  describe('UpdateArticleDto validation', () => {
+    it('should reject empty or whitespace-only title and body', async () => {
+      const dto = plainToInstance(UpdateArticleDto, { title: '   ', body: '' });
+      const errors = await validate(dto);
+      const errorProps = errors.map((e) => e.property);
+      expect(errorProps).toContain('title');
+      expect(errorProps).toContain('body');
+    });
+
+    it('should reject null for title, body, and tagList', async () => {
+      const dto = plainToInstance(UpdateArticleDto, {
+        title: null,
+        body: null,
+        tagList: null,
+      });
+      const errors = await validate(dto);
+      const errorProps = errors.map((e) => e.property);
+      expect(errorProps).toContain('title');
+      expect(errorProps).toContain('body');
+      expect(errorProps).toContain('tagList');
+    });
+
+    it('should pass valid partial update when only title is supplied', async () => {
+      const dto = plainToInstance(UpdateArticleDto, { title: '  Updated Title  ' });
+      const errors = await validate(dto);
+      expect(errors).toHaveLength(0);
+      expect(dto.title).toBe('Updated Title');
+    });
+  });
+
   describe('deleteArticle', () => {
     it('should throw ForbiddenException if user is not author or admin', async () => {
       mockArticleRepo.findOne.mockResolvedValue({
@@ -213,7 +384,7 @@ describe('ArticlesService', () => {
   });
 
   describe('favorite & unfavorite', () => {
-    it('should favorite an article and atomically increment count', async () => {
+    it('should save favorite without double-incrementing favoritesCount (handled by DB trigger)', async () => {
       const mockArticle = {
         id: 'art-1',
         slug: 'fav-slug',
@@ -229,12 +400,12 @@ describe('ArticlesService', () => {
       const result = await service.favoriteArticle('fav-slug', 'user-1');
 
       expect(mockFavoriteRepo.save).toHaveBeenCalled();
-      expect(mockArticleRepo.increment).toHaveBeenCalledWith({ id: 'art-1' }, 'favoritesCount', 1);
+      expect(mockArticleRepo.increment).not.toHaveBeenCalled();
       expect(result.favorited).toBe(true);
       expect(result.favoritesCount).toBe(1);
     });
 
-    it('should unfavorite an article and atomically decrement count', async () => {
+    it('should remove favorite without double-decrementing favoritesCount (handled by DB trigger)', async () => {
       const mockArticle = {
         id: 'art-1',
         slug: 'fav-slug',
@@ -252,7 +423,7 @@ describe('ArticlesService', () => {
       const result = await service.unfavoriteArticle('fav-slug', 'user-1');
 
       expect(mockFavoriteRepo.remove).toHaveBeenCalledWith(existingFav);
-      expect(mockArticleRepo.decrement).toHaveBeenCalledWith({ id: 'art-1' }, 'favoritesCount', 1);
+      expect(mockArticleRepo.decrement).not.toHaveBeenCalled();
       expect(result.favorited).toBe(false);
       expect(result.favoritesCount).toBe(1);
     });
