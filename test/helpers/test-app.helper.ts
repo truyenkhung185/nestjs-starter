@@ -26,23 +26,28 @@ export async function createTestApp(): Promise<TestAppContext> {
 
   const app = moduleFixture.createNestApplication<INestApplication<App>>();
 
-  // Mirror global pipes & interceptors configured in src/main.ts
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-    }),
-  );
-  app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+  try {
+    // Mirror global pipes & interceptors configured in src/main.ts
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        transform: true,
+        forbidNonWhitelisted: true,
+      }),
+    );
+    app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
-  await app.init();
+    await app.init();
 
-  const dataSource = moduleFixture.get(DataSource);
-  const jwtService = moduleFixture.get(JwtService);
-  const configService = moduleFixture.get(ConfigService);
+    const dataSource = moduleFixture.get(DataSource);
+    const jwtService = moduleFixture.get(JwtService);
+    const configService = moduleFixture.get(ConfigService);
 
-  await prepareTestDatabase(dataSource);
+    await prepareTestDatabase(dataSource);
 
-  return { app, dataSource, jwtService, configService };
+    return { app, dataSource, jwtService, configService };
+  } catch (err) {
+    await app.close().catch(() => {});
+    throw err;
+  }
 }

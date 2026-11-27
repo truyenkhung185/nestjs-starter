@@ -12,7 +12,7 @@ import { fileURLToPath } from 'url';
 
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { MIGRATIONS } from './database/data-source.js';
+import { resolveMigrationsGlob } from './database/data-source.js';
 import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { RedisModule } from './redis/redis.module.js';
@@ -48,7 +48,7 @@ const __dirname = path.dirname(__filename);
         password: configService.get<string>('DB_PASSWORD') || 'postgres',
         database: configService.get<string>('DB_NAME') || 'nestjs_db',
         autoLoadEntities: true,
-        migrations: MIGRATIONS,
+        migrations: resolveMigrationsGlob(),
         synchronize: false,
         logging: configService.get<string>('NODE_ENV') === 'development',
       }),

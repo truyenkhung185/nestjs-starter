@@ -1,20 +1,23 @@
 import { DataSource, DataSourceOptions } from 'typeorm';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
-import { CreateUsersTable1731154000000 } from '../migrations/1731154000000-CreateUsersTable.js';
-import { CreateAttachmentsAndFollows1732090000000 } from '../migrations/1732090000000-CreateAttachmentsAndFollows.js';
-import { CreateArticlesAndFavorites1732100000000 } from '../migrations/1732100000000-CreateArticlesAndFavorites.js';
-import { CreateCommentsTable1732500000000 } from '../migrations/1732500000000-CreateCommentsTable.js';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const envPath = process.env.NODE_ENV === 'test' ? '.env.test' : '.env';
 dotenv.config({ path: envPath });
 
-export const MIGRATIONS = [
-  CreateUsersTable1731154000000,
-  CreateAttachmentsAndFollows1732090000000,
-  CreateArticlesAndFavorites1732100000000,
-  CreateCommentsTable1732500000000,
-];
+/**
+ * Automatically discovers all migration files in chronological filename order
+ * for both compiled CLI execution (dist/migrations/*.js) and TS test execution (src/migrations/*.ts).
+ */
+export function resolveMigrationsGlob(): string[] {
+  const isCompiledJs = path.extname(__filename) === '.js';
+  const pattern = isCompiledJs ? '*.js' : '*.ts';
+  return [path.join(__dirname, '..', 'migrations', pattern).replace(/\\/g, '/')];
+}
 
 export const dataSourceOptions: DataSourceOptions = {
   type: 'postgres',
@@ -24,7 +27,7 @@ export const dataSourceOptions: DataSourceOptions = {
   password: process.env.DB_PASSWORD || 'postgres',
   database: process.env.DB_NAME || 'nestjs_db',
   entities: [path.join(process.cwd(), 'dist', '**', '*.entity.js')],
-  migrations: MIGRATIONS,
+  migrations: resolveMigrationsGlob(),
   synchronize: false,
   logging: process.env.NODE_ENV === 'development',
 };
