@@ -1,105 +1,84 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { ClassSerializerInterceptor, INestApplication, ValidationPipe } from '@nestjs/common';
-import { Reflector } from '@nestjs/core';
-import { DataSource } from 'typeorm';
 import request from 'supertest';
-import { App } from 'supertest/types.js';
-import { AppModule } from '../src/app.module.js';
+import { User, UserRole } from '../src/users/entities/user.entity.js';
+import { createTestApp, TestAppContext } from './helpers/test-app.helper.js';
+import { flushTestRedis, truncateAllTables } from './helpers/test-db.helper.js';
+import { createFakeUser, loginAs } from './helpers/factory.helper.js';
 
 describe('ArticlesController (e2e)', () => {
-  let app: INestApplication<App>;
-  let dataSource: DataSource;
-
-  const uniqueTag = `nestjs-e2e-${Date.now()}`;
-  const otherTag = `other-e2e-${Date.now()}`;
-  const authorEmail = `author-${Date.now()}@e2e.local`;
-  const fanEmail = `fan-${Date.now()}@e2e.local`;
-  const password = 'Password123!';
-
+  let ctx: TestAppContext;
+  let author: User;
   let authorToken: string;
+  let fan: User;
   let fanToken: string;
-  let fanUserId: string;
   let firstSlug: string;
   let secondSlug: string;
 
   beforeAll(async () => {
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    ctx = await createTestApp();
+  });
 
-    app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({
-        whitelist: true,
-        transform: true,
-        forbidNonWhitelisted: true,
-      }),
-    );
-    app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
-    await app.init();
+  beforeEach(async () => {
+    const seededAuthor = await createFakeUser(ctx.dataSource, {
+      role: UserRole.USER,
+    });
+    author = seededAuthor.user;
+    authorToken = await loginAs(ctx.app, author.email, seededAuthor.rawPassword);
 
-    dataSource = moduleFixture.get(DataSource);
+    const seededFan = await createFakeUser(ctx.dataSource, {
+      role: UserRole.USER,
+    });
+    fan = seededFan.user;
+    fanToken = await loginAs(ctx.app, fan.email, seededFan.rawPassword);
 
-    // Register author & fan users
-    const authorRes = await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({ email: authorEmail, password, fullName: 'E2E Author' })
-      .expect(201);
-    authorToken = authorRes.body.tokens.accessToken;
-
-    const fanRes = await request(app.getHttpServer())
-      .post('/auth/register')
-      .send({ email: fanEmail, password, fullName: 'E2E Fan' })
-      .expect(201);
-    fanToken = fanRes.body.tokens.accessToken;
-    fanUserId = fanRes.body.user.id;
-
-    // Create 2 articles
-    const art1Res = await request(app.getHttpServer())
+    const art1Res = await request(ctx.app.getHttpServer())
       .post('/articles')
       .set('Authorization', `Bearer ${authorToken}`)
       .send({
         title: 'Học NestJS cơ bản',
         description: 'Vietnamese slug test',
         body: 'Body 1',
-        tagList: [uniqueTag, 'typescript'],
+        tagList: ['nestjs', 'typescript'],
       })
       .expect(201);
     firstSlug = art1Res.body.slug;
 
-    const art2Res = await request(app.getHttpServer())
+    const art2Res = await request(ctx.app.getHttpServer())
       .post('/articles')
       .set('Authorization', `Bearer ${authorToken}`)
       .send({
         title: 'Second E2E Article',
         description: 'Second article',
         body: 'Body 2',
-        tagList: [otherTag],
+        tagList: ['react'],
       })
       .expect(201);
     secondSlug = art2Res.body.slug;
   });
 
+  afterEach(async () => {
+    await truncateAllTables(ctx.dataSource);
+    await flushTestRedis();
+  });
+
   afterAll(async () => {
-    if (dataSource?.isInitialized) {
-      await dataSource.query('DELETE FROM "users" WHERE "email" IN ($1, $2)', [
-        authorEmail,
-        fanEmail,
-      ]);
-    }
-    if (app) {
-      await app.close();
+    if (ctx?.app) {
+      await ctx.app.close();
     }
   });
 
-  it('should generate ASCII slug from Vietnamese title', () => {
+  it('should generate ASCII slug from Vietnamese title and hide author email', async () => {
     expect(firstSlug).toMatch(/^hoc-nestjs-co-ban-[a-f0-9]{8}$/);
+
+    const res = await request(ctx.app.getHttpServer())
+      .get(`/articles/${firstSlug}`)
+      .expect(200);
+    expect(res.body.author).not.toHaveProperty('email');
   });
 
-  it('GET /articles?tag=... should return only articles with that tag', async () => {
-    const res = await request(app.getHttpServer())
+  it('GET /articles?tag=nestjs should return only articles with that tag', async () => {
+    const res = await request(ctx.app.getHttpServer())
       .get('/articles')
-      .query({ tag: uniqueTag })
+      .query({ tag: 'nestjs' })
       .expect(200);
 
     expect(res.body.articlesCount).toBe(1);
@@ -108,9 +87,9 @@ describe('ArticlesController (e2e)', () => {
   });
 
   it('GET /articles?author=... should return only articles by that author', async () => {
-    const res = await request(app.getHttpServer())
+    const res = await request(ctx.app.getHttpServer())
       .get('/articles')
-      .query({ author: authorEmail })
+      .query({ author: author.email })
       .expect(200);
 
     expect(res.body.articlesCount).toBe(2);
@@ -120,7 +99,7 @@ describe('ArticlesController (e2e)', () => {
   });
 
   it('POST /articles/:slug/favorite once should set favoritesCount = 1 (not 2) and filter by favorited email & id', async () => {
-    const favRes = await request(app.getHttpServer())
+    const favRes = await request(ctx.app.getHttpServer())
       .post(`/articles/${firstSlug}/favorite`)
       .set('Authorization', `Bearer ${fanToken}`)
       .expect(201);
@@ -128,24 +107,21 @@ describe('ArticlesController (e2e)', () => {
     expect(favRes.body.favorited).toBe(true);
     expect(favRes.body.favoritesCount).toBe(1);
 
-    // Filter by favorited email
-    const byEmailRes = await request(app.getHttpServer())
+    const byEmailRes = await request(ctx.app.getHttpServer())
       .get('/articles')
-      .query({ favorited: fanEmail })
+      .query({ favorited: fan.email })
       .expect(200);
     expect(byEmailRes.body.articlesCount).toBe(1);
     expect(byEmailRes.body.articles[0].slug).toBe(firstSlug);
 
-    // Filter by favorited user UUID
-    const byIdRes = await request(app.getHttpServer())
+    const byIdRes = await request(ctx.app.getHttpServer())
       .get('/articles')
-      .query({ favorited: fanUserId })
+      .query({ favorited: fan.id })
       .expect(200);
     expect(byIdRes.body.articlesCount).toBe(1);
     expect(byIdRes.body.articles[0].slug).toBe(firstSlug);
 
-    // Unfavorite once should decrement back to 0 (not negative)
-    const unfavRes = await request(app.getHttpServer())
+    const unfavRes = await request(ctx.app.getHttpServer())
       .delete(`/articles/${firstSlug}/favorite`)
       .set('Authorization', `Bearer ${fanToken}`)
       .expect(200);
@@ -155,14 +131,14 @@ describe('ArticlesController (e2e)', () => {
   });
 
   it('GET /articles should paginate consistently with limit and offset', async () => {
-    const page1 = await request(app.getHttpServer())
+    const page1 = await request(ctx.app.getHttpServer())
       .get('/articles')
-      .query({ author: authorEmail, limit: 1, offset: 0 })
+      .query({ author: author.email, limit: 1, offset: 0 })
       .expect(200);
 
-    const page2 = await request(app.getHttpServer())
+    const page2 = await request(ctx.app.getHttpServer())
       .get('/articles')
-      .query({ author: authorEmail, limit: 1, offset: 1 })
+      .query({ author: author.email, limit: 1, offset: 1 })
       .expect(200);
 
     expect(page1.body.articlesCount).toBe(2);
@@ -172,13 +148,13 @@ describe('ArticlesController (e2e)', () => {
   });
 
   it('PUT /articles/:slug should reject empty title or body with 400', async () => {
-    await request(app.getHttpServer())
+    await request(ctx.app.getHttpServer())
       .put(`/articles/${firstSlug}`)
       .set('Authorization', `Bearer ${authorToken}`)
       .send({ title: '' })
       .expect(400);
 
-    await request(app.getHttpServer())
+    await request(ctx.app.getHttpServer())
       .put(`/articles/${firstSlug}`)
       .set('Authorization', `Bearer ${authorToken}`)
       .send({ body: '   ' })
