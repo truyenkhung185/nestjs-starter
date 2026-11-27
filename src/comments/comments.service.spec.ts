@@ -69,7 +69,7 @@ describe('CommentsService', () => {
   });
 
   describe('addComment', () => {
-    it('should add a comment to an article and return formatted comment', async () => {
+    it('should add a comment to an article and return formatted comment without author email', async () => {
       mockArticleRepo.findOne.mockResolvedValue(mockArticle);
       mockUserRepo.findOne.mockResolvedValue(mockAuthor);
 
@@ -87,12 +87,12 @@ describe('CommentsService', () => {
       expect(result.body).toBe('Very helpful article!');
       expect(result.author).toEqual({
         id: 'author-1',
-        email: 'author@example.com',
         fullName: 'Author One',
         bio: 'Developer',
         avatarUrl: '/public/avatar.png',
         following: false,
       });
+      expect(result.author).not.toHaveProperty('email');
     });
 
     it('should throw NotFoundException if article does not exist', async () => {
@@ -124,7 +124,7 @@ describe('CommentsService', () => {
   });
 
   describe('getComments', () => {
-    it('should return comments with accurate following status for authenticated user', async () => {
+    it('should pass pagination & deterministic order to findAndCount and return accurate following status without email', async () => {
       mockArticleRepo.findOne.mockResolvedValue(mockArticle);
       const comment1 = {
         id: 'comment-1',
@@ -158,18 +158,29 @@ describe('CommentsService', () => {
 
       const result = await service.getComments(
         'nestjs-guide-12345678',
-        { limit: 10, offset: 0 },
+        { limit: 10, offset: 5 },
         'viewer-1',
       );
 
+      expect(mockCommentRepo.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { articleId: 'article-1' },
+          relations: { author: true },
+          order: { createdAt: 'DESC', id: 'DESC' },
+          skip: 5,
+          take: 10,
+        }),
+      );
       expect(result.commentsCount).toBe(2);
       expect(result.comments).toHaveLength(2);
       expect(result.comments[0].author.following).toBe(true);
       expect(result.comments[1].author.following).toBe(false);
+      expect(result.comments[0].author).not.toHaveProperty('email');
+      expect(result.comments[1].author).not.toHaveProperty('email');
       expect(mockUserFollowRepo.find).toHaveBeenCalledTimes(1);
     });
 
-    it('should return following=false for unauthenticated guest without querying follows', async () => {
+    it('should apply default pagination and return following=false for unauthenticated guest without querying follows', async () => {
       mockArticleRepo.findOne.mockResolvedValue(mockArticle);
       const comment = {
         id: 'comment-1',
@@ -185,8 +196,18 @@ describe('CommentsService', () => {
 
       const result = await service.getComments('nestjs-guide-12345678', {});
 
+      expect(mockCommentRepo.findAndCount).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { articleId: 'article-1' },
+          relations: { author: true },
+          order: { createdAt: 'DESC', id: 'DESC' },
+          skip: 0,
+          take: 20,
+        }),
+      );
       expect(result.commentsCount).toBe(1);
       expect(result.comments[0].author.following).toBe(false);
+      expect(result.comments[0].author).not.toHaveProperty('email');
       expect(mockUserFollowRepo.find).not.toHaveBeenCalled();
     });
 

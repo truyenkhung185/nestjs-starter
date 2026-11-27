@@ -27,7 +27,6 @@ export interface FormattedArticle {
   favorited: boolean;
   author: {
     id: string;
-    email: string;
     fullName: string | null;
     bio: string | null;
     avatarUrl: string | null;
@@ -68,6 +67,21 @@ export class ArticlesService {
     return baseSlug ? `${baseSlug}-${uniqueSuffix}` : uniqueSuffix;
   }
 
+  private async findArticleBySlugOrFail(slug: string, withAuthor = false): Promise<Article> {
+    const article = await this.articleRepository.findOne({
+      where: { slug },
+      relations: withAuthor ? { author: true } : undefined,
+    });
+
+    if (!article) {
+      throw new NotFoundException(
+        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }),
+      );
+    }
+
+    return article;
+  }
+
   async createArticle(
     authorId: string,
     createArticleDto: CreateArticleDto,
@@ -94,17 +108,7 @@ export class ArticlesService {
     slug: string,
     currentUserId?: string,
   ): Promise<FormattedArticle> {
-    const article = await this.articleRepository.findOne({
-      where: { slug },
-      relations: { author: true },
-    });
-
-    if (!article) {
-      throw new NotFoundException(
-        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
-          `Article with slug "${slug}" not found`,
-      );
-    }
+    const article = await this.findArticleBySlugOrFail(slug, true);
 
     let favorited = false;
     let following = false;
@@ -131,23 +135,10 @@ export class ArticlesService {
     userRole: string,
     updateArticleDto: UpdateArticleDto,
   ): Promise<FormattedArticle> {
-    const article = await this.articleRepository.findOne({
-      where: { slug },
-      relations: { author: true },
-    });
-
-    if (!article) {
-      throw new NotFoundException(
-        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
-          `Article with slug "${slug}" not found`,
-      );
-    }
+    const article = await this.findArticleBySlugOrFail(slug, true);
 
     if (article.authorId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException(
-        this.i18n.t('articles.FORBIDDEN_UPDATE') ||
-          'You are not allowed to update this article',
-      );
+      throw new ForbiddenException(this.i18n.t('articles.FORBIDDEN_UPDATE'));
     }
 
     // Atomic update only for supplied fields to avoid overwriting concurrent changes
@@ -192,27 +183,15 @@ export class ArticlesService {
     userId: string,
     userRole: string,
   ): Promise<{ message: string }> {
-    const article = await this.articleRepository.findOne({ where: { slug } });
-
-    if (!article) {
-      throw new NotFoundException(
-        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
-          `Article with slug "${slug}" not found`,
-      );
-    }
+    const article = await this.findArticleBySlugOrFail(slug);
 
     if (article.authorId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException(
-        this.i18n.t('articles.FORBIDDEN_DELETE') ||
-          'You are not allowed to delete this article',
-      );
+      throw new ForbiddenException(this.i18n.t('articles.FORBIDDEN_DELETE'));
     }
 
     await this.articleRepository.remove(article);
     return {
-      message:
-        this.i18n.t('articles.ARTICLE_DELETED_SUCCESS') ||
-        'Article successfully deleted',
+      message: this.i18n.t('articles.ARTICLE_DELETED_SUCCESS'),
     };
   }
 
@@ -295,17 +274,7 @@ export class ArticlesService {
     slug: string,
     userId: string,
   ): Promise<FormattedArticle> {
-    const article = await this.articleRepository.findOne({
-      where: { slug },
-      relations: { author: true },
-    });
-
-    if (!article) {
-      throw new NotFoundException(
-        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
-          `Article with slug "${slug}" not found`,
-      );
-    }
+    const article = await this.findArticleBySlugOrFail(slug, true);
 
     const existingFavorite = await this.favoriteRepository.findOne({
       where: { userId, articleId: article.id },
@@ -341,17 +310,7 @@ export class ArticlesService {
     slug: string,
     userId: string,
   ): Promise<FormattedArticle> {
-    const article = await this.articleRepository.findOne({
-      where: { slug },
-      relations: { author: true },
-    });
-
-    if (!article) {
-      throw new NotFoundException(
-        this.i18n.t('articles.ARTICLE_NOT_FOUND', { args: { slug } }) ||
-          `Article with slug "${slug}" not found`,
-      );
-    }
+    const article = await this.findArticleBySlugOrFail(slug, true);
 
     const existingFavorite = await this.favoriteRepository.findOne({
       where: { userId, articleId: article.id },
@@ -427,7 +386,6 @@ export class ArticlesService {
       favorited,
       author: {
         id: author.id,
-        email: author.email,
         fullName: author.fullName,
         bio: author.bio,
         avatarUrl: author.avatarUrl,

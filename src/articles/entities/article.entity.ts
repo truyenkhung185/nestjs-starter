@@ -16,7 +16,7 @@ export class Article {
   id: string;
 
   @Column({ unique: true })
-  @Index()
+  @Index('IDX_articles_slug')
   slug: string;
 
   @Column()
@@ -29,7 +29,7 @@ export class Article {
   body: string;
 
   @Column({ name: 'author_id', type: 'uuid' })
-  @Index()
+  @Index('IDX_articles_author')
   authorId: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })

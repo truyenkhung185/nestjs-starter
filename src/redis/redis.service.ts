@@ -43,7 +43,7 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   }
 
   private throwUnavailable(errorMsg?: string): never {
-    const message = this.i18n.t('auth.REDIS_UNAVAILABLE') || 'Authentication service temporarily unavailable';
+    const message = this.i18n.t('auth.REDIS_UNAVAILABLE');
     this.logger.error(`Redis operation failed: ${errorMsg || 'Client not ready'}`);
     throw new ServiceUnavailableException(message);
   }

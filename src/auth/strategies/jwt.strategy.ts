@@ -33,16 +33,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (jti) {
       const isBlacklisted = await this.redisService.isTokenBlacklisted(jti);
       if (isBlacklisted) {
-        throw new UnauthorizedException(
-          this.i18n.t('auth.TOKEN_REVOKED') || 'Token has been revoked/blacklisted (User logged out)',
-        );
+        throw new UnauthorizedException(this.i18n.t('auth.TOKEN_REVOKED'));
       }
     }
 
     const user = await this.usersService.findByIdOrNull(payload.sub);
     if (!user || !user.isActive) {
       throw new UnauthorizedException(
-        this.i18n.t('auth.USER_NOT_FOUND_OR_INACTIVE') || 'User is inactive or not found',
+        this.i18n.t('auth.USER_NOT_FOUND_OR_INACTIVE'),
       );
     }
 

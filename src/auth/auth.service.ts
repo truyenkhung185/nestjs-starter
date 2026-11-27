@@ -48,9 +48,7 @@ export class AuthService {
   async register(registerDto: RegisterDto) {
     const existingUser = await this.usersService.findByEmail(registerDto.email);
     if (existingUser) {
-      throw new ConflictException(
-        this.i18n.t('auth.EMAIL_ALREADY_EXISTS') || 'Email already exists',
-      );
+      throw new ConflictException(this.i18n.t('auth.EMAIL_ALREADY_EXISTS'));
     }
 
     const salt = await bcrypt.genSalt(10);
@@ -66,9 +64,7 @@ export class AuthService {
     } catch (err: any) {
       // Postgres unique constraint violation code is 23505
       if (err?.code === '23505' || err?.message?.includes('duplicate key') || err?.message?.includes('unique')) {
-        throw new ConflictException(
-          this.i18n.t('auth.EMAIL_ALREADY_EXISTS') || 'Email already exists',
-        );
+        throw new ConflictException(this.i18n.t('auth.EMAIL_ALREADY_EXISTS'));
       }
       throw err;
     }
@@ -80,7 +76,7 @@ export class AuthService {
     });
 
     return {
-      message: this.i18n.t('auth.REGISTRATION_SUCCESS') || 'Registration successful',
+      message: this.i18n.t('auth.REGISTRATION_SUCCESS'),
       user: newUser,
       tokens,
     };
@@ -92,22 +88,16 @@ export class AuthService {
     if (!user) {
       // Mitigate timing attacks by executing bcrypt.compare against a dummy hash
       await bcrypt.compare(loginDto.password, DUMMY_HASH);
-      throw new UnauthorizedException(
-        this.i18n.t('auth.INVALID_CREDENTIALS') || 'Invalid email or password',
-      );
+      throw new UnauthorizedException(this.i18n.t('auth.INVALID_CREDENTIALS'));
     }
 
     const isPasswordValid = await bcrypt.compare(loginDto.password, user.password);
     if (!isPasswordValid) {
-      throw new UnauthorizedException(
-        this.i18n.t('auth.INVALID_CREDENTIALS') || 'Invalid email or password',
-      );
+      throw new UnauthorizedException(this.i18n.t('auth.INVALID_CREDENTIALS'));
     }
 
     if (!user.isActive) {
-      throw new UnauthorizedException(
-        this.i18n.t('auth.ACCOUNT_INACTIVE') || 'Account is inactive',
-      );
+      throw new UnauthorizedException(this.i18n.t('auth.ACCOUNT_INACTIVE'));
     }
 
     const tokens = await this.generateTokens({
@@ -117,7 +107,7 @@ export class AuthService {
     });
 
     return {
-      message: this.i18n.t('auth.LOGIN_SUCCESS') || 'Login successful',
+      message: this.i18n.t('auth.LOGIN_SUCCESS'),
       tokens,
       user,
     };
@@ -150,7 +140,7 @@ export class AuthService {
     }
 
     return {
-      message: this.i18n.t('auth.LOGOUT_SUCCESS') || 'Logout successful, token added to Redis blacklist',
+      message: this.i18n.t('auth.LOGOUT_SUCCESS'),
     };
   }
 }

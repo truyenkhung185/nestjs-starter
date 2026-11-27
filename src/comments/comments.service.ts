@@ -21,7 +21,6 @@ export interface FormattedComment {
   updatedAt: Date;
   author: {
     id: string;
-    email: string;
     fullName: string | null;
     bio: string | null;
     avatarUrl: string | null;
@@ -43,24 +42,26 @@ export class CommentsService {
     private readonly i18n: I18nService,
   ) {}
 
+  private async findArticleBySlugOrFail(slug: string): Promise<Article> {
+    const article = await this.articleRepository.findOne({ where: { slug } });
+    if (!article) {
+      throw new NotFoundException(
+        this.i18n.t('comments.ARTICLE_NOT_FOUND', { args: { slug } }),
+      );
+    }
+    return article;
+  }
+
   async addComment(
     slug: string,
     authorId: string,
     createCommentDto: CreateCommentDto,
   ): Promise<FormattedComment> {
-    const article = await this.articleRepository.findOne({ where: { slug } });
-    if (!article) {
-      throw new NotFoundException(
-        this.i18n.t('comments.ARTICLE_NOT_FOUND', { args: { slug } }) ||
-          `Article with slug "${slug}" not found`,
-      );
-    }
+    const article = await this.findArticleBySlugOrFail(slug);
 
     const author = await this.userRepository.findOne({ where: { id: authorId } });
     if (!author) {
-      throw new NotFoundException(
-        this.i18n.t('comments.AUTHOR_NOT_FOUND') || 'Author not found',
-      );
+      throw new NotFoundException(this.i18n.t('comments.AUTHOR_NOT_FOUND'));
     }
 
     const comment = this.commentRepository.create({
@@ -76,8 +77,7 @@ export class CommentsService {
       // Postgres foreign key violation (23503) if article/author deleted concurrently
       if (err?.code === '23503') {
         throw new NotFoundException(
-          this.i18n.t('comments.ARTICLE_NOT_FOUND', { args: { slug } }) ||
-            `Article with slug "${slug}" not found`,
+          this.i18n.t('comments.ARTICLE_NOT_FOUND', { args: { slug } }),
         );
       }
       throw err;
@@ -91,13 +91,7 @@ export class CommentsService {
     query: QueryCommentsDto = {},
     currentUserId?: string,
   ): Promise<{ comments: FormattedComment[]; commentsCount: number }> {
-    const article = await this.articleRepository.findOne({ where: { slug } });
-    if (!article) {
-      throw new NotFoundException(
-        this.i18n.t('comments.ARTICLE_NOT_FOUND', { args: { slug } }) ||
-          `Article with slug "${slug}" not found`,
-      );
-    }
+    const article = await this.findArticleBySlugOrFail(slug);
 
     const limit = query.limit ?? COMMENT_FIELD_LIMITS.DEFAULT_PAGE_LIMIT;
     const offset = query.offset ?? COMMENT_FIELD_LIMITS.DEFAULT_PAGE_OFFSET;
@@ -105,7 +99,7 @@ export class CommentsService {
     const [comments, commentsCount] = await this.commentRepository.findAndCount({
       where: { articleId: article.id },
       relations: { author: true },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: 'DESC', id: 'DESC' },
       skip: offset,
       take: limit,
     });
@@ -140,13 +134,7 @@ export class CommentsService {
     userId: string,
     userRole: string,
   ): Promise<{ message: string }> {
-    const article = await this.articleRepository.findOne({ where: { slug } });
-    if (!article) {
-      throw new NotFoundException(
-        this.i18n.t('comments.ARTICLE_NOT_FOUND', { args: { slug } }) ||
-          `Article with slug "${slug}" not found`,
-      );
-    }
+    const article = await this.findArticleBySlugOrFail(slug);
 
     const comment = await this.commentRepository.findOne({
       where: { id: commentId, articleId: article.id },
@@ -154,24 +142,18 @@ export class CommentsService {
 
     if (!comment) {
       throw new NotFoundException(
-        this.i18n.t('comments.COMMENT_NOT_FOUND', { args: { id: commentId } }) ||
-          `Comment with ID "${commentId}" not found`,
+        this.i18n.t('comments.COMMENT_NOT_FOUND', { args: { id: commentId } }),
       );
     }
 
     if (comment.authorId !== userId && userRole !== UserRole.ADMIN) {
-      throw new ForbiddenException(
-        this.i18n.t('comments.FORBIDDEN_DELETE') ||
-          'You are not allowed to delete this comment',
-      );
+      throw new ForbiddenException(this.i18n.t('comments.FORBIDDEN_DELETE'));
     }
 
     await this.commentRepository.remove(comment);
 
     return {
-      message:
-        this.i18n.t('comments.COMMENT_DELETED_SUCCESS') ||
-        'Comment successfully deleted',
+      message: this.i18n.t('comments.COMMENT_DELETED_SUCCESS'),
     };
   }
 
@@ -187,7 +169,6 @@ export class CommentsService {
       updatedAt: comment.updatedAt,
       author: {
         id: author.id,
-        email: author.email,
         fullName: author.fullName,
         bio: author.bio,
         avatarUrl: author.avatarUrl,

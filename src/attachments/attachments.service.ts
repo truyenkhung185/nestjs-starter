@@ -59,9 +59,7 @@ export class AttachmentsService {
     // Secure: ONLY deduce extension from verified whitelist mapping, NEVER from originalname
     const safeExtension = MIME_TO_EXTENSION[file.mimetype];
     if (!safeExtension) {
-      throw new BadRequestException(
-        this.i18n.t('users.INVALID_AVATAR_TYPE') || 'Unsupported file type',
-      );
+      throw new BadRequestException(this.i18n.t('users.INVALID_AVATAR_TYPE'));
     }
 
     const uniqueId = crypto.randomUUID();
@@ -104,8 +102,7 @@ export class AttachmentsService {
     const attachment = await this.attachmentRepository.findOne({ where: { id } });
     if (!attachment) {
       throw new NotFoundException(
-        this.i18n.t('users.ATTACHMENT_NOT_FOUND', { args: { id } }) ||
-          `Attachment with ID ${id} not found`,
+        this.i18n.t('users.ATTACHMENT_NOT_FOUND', { args: { id } }),
       );
     }
     return attachment;
@@ -134,17 +131,11 @@ export class AttachmentsService {
     const isAdmin = requesterRole === UserRole.ADMIN;
 
     if (!isOwner && !isAdmin) {
-      throw new ForbiddenException(
-        this.i18n.t('users.FORBIDDEN_FILE_ACCESS') ||
-          'You do not have permission to access this private file',
-      );
+      throw new ForbiddenException(this.i18n.t('users.FORBIDDEN_FILE_ACCESS'));
     }
 
     if (!fs.existsSync(attachment.storagePath)) {
-      throw new NotFoundException(
-        this.i18n.t('users.PHYSICAL_FILE_NOT_FOUND') ||
-          'The requested physical file was not found on server',
-      );
+      throw new NotFoundException(this.i18n.t('users.PHYSICAL_FILE_NOT_FOUND'));
     }
 
     return {

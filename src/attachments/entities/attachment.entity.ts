@@ -13,7 +13,7 @@ export enum AttachmentAccess {
 }
 
 @Entity('attachments')
-@Index(['attachableType', 'attachableId'])
+@Index('IDX_attachments_polymorphic', ['attachableType', 'attachableId'])
 export class Attachment {
   @PrimaryGeneratedColumn('uuid')
   id: string;

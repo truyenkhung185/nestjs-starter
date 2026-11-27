@@ -12,17 +12,17 @@ import { User } from '../../users/entities/user.entity.js';
 import { Article } from './article.entity.js';
 
 @Entity('article_favorites')
-@Unique(['userId', 'articleId'])
+@Unique('UQ_article_favorites', ['userId', 'articleId'])
 export class ArticleFavorite {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
   @Column({ name: 'user_id', type: 'uuid' })
-  @Index()
+  @Index('IDX_article_favorites_user')
   userId: string;
 
   @Column({ name: 'article_id', type: 'uuid' })
-  @Index()
+  @Index('IDX_article_favorites_article')
   articleId: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })

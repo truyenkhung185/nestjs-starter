@@ -12,7 +12,7 @@ import { Article } from '../../articles/entities/article.entity.js';
 import { User } from '../../users/entities/user.entity.js';
 
 @Entity('comments')
-@Index(['articleId', 'createdAt'])
+@Index('IDX_comments_article_created_at', ['articleId', 'createdAt'])
 export class Comment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
@@ -28,7 +28,7 @@ export class Comment {
   article: Article;
 
   @Column({ name: 'author_id', type: 'uuid' })
-  @Index()
+  @Index('IDX_comments_author')
   authorId: string;
 
   @ManyToOne(() => User, { onDelete: 'CASCADE' })
